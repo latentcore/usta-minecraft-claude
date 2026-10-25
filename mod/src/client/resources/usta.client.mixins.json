@@ -1,0 +1,12 @@
+{
+	"required": true,
+	"package": "dev.usta.client.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": ["WindowHideMixin"],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

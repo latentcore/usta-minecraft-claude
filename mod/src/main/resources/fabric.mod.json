@@ -1,0 +1,28 @@
+{
+	"schemaVersion": 1,
+	"id": "usta",
+	"version": "${version}",
+	"name": "Usta",
+	"description": "Claude ile tek oyunculu dunyalarda yapi ustasi: goren, tasarlayan, izlenebilir bicimde kuran ve tek komutla geri alan yerel arac. Dunyaya yalniz vanilla bloklar yazar.",
+	"authors": ["latentcore"],
+	"license": "MIT",
+	"icon": "assets/usta/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": ["dev.usta.UstaMod"],
+		"client": ["dev.usta.client.UstaClient"]
+	},
+	"mixins": [
+		"usta.mixins.json",
+		{
+			"config": "usta.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

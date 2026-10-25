@@ -1,0 +1,27 @@
+# Gradle / Loom
+mod/.gradle/
+mod/build/
+mod/run/
+mod/out/
+mod/bin/
+*.class
+# Python
+bridge/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+bridge/build/
+bridge/*.egg-info/
+# Calisma ciktilari (git'e girmez, K9)
+work/
+KANIT/raw/
+KANIT/**/*.mp4
+*.log
+scripts/dev/keepawake.stop
+# Gizli ve yerel ayarlar
+**/api.json
+**/token*
+config.local.json
+# Yerel arac durumu
+.claude/
+KURULUM_IZI.md

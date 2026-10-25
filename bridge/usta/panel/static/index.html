@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf" content="__CSRF__">
+<title>Usta Paneli</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">▣</span> Usta <small>· Claude yapı ustası</small></div>
+  <div id="status" class="pill">bağlanıyor…</div>
+</header>
+<main>
+  <section class="mapcol">
+    <div class="toolbar">
+      <label>Yarıçap
+        <select id="radius"><option>48</option><option selected>96</option><option>160</option><option>256</option></select>
+      </label>
+      <button id="refresh" title="Haritayı yenile">Yenile</button>
+      <button id="center" title="Oyuncuya ortala">Oyuncu</button>
+      <span id="sel" class="muted">Haritaya tıkla: 1. köşe, 2. köşe</span>
+    </div>
+    <div id="mapwrap"><img id="map" alt="kuş bakışı harita"><div id="selbox"></div></div>
+    <div class="toolbar">
+      <button id="protect" disabled>Seçimi koru…</button>
+      <button id="buildhere" disabled>Seçime inşa iste…</button>
+      <button id="clearsel" disabled>Seçimi temizle</button>
+    </div>
+  </section>
+  <section class="side">
+    <div class="card">
+      <h3>İstek</h3>
+      <textarea id="req" rows="3" placeholder="ör. önüme devasa modern güzel bir ev yap"></textarea>
+      <div class="row"><button id="send" class="primary">Gönder</button><button id="cancelreq">İsteği iptal et</button></div>
+      <div id="feed" class="feed"></div>
+    </div>
+    <nav class="tabs">
+      <button data-tab="jobs" class="active">İşler</button><button data-tab="hist">Geçmiş</button><button data-tab="lib">Kütüphane</button>
+      <button data-tab="prot">Korunan</button><button data-tab="set">Ayarlar</button><button data-tab="health">Sağlık</button>
+    </nav>
+    <div id="tab-jobs" class="tab card"></div>
+    <div id="tab-hist" class="tab card hidden"></div>
+    <div id="tab-lib" class="tab card hidden"></div>
+    <div id="tab-prot" class="tab card hidden"></div>
+    <div id="tab-set" class="tab card hidden">
+      <label>Varsayılan kip <select id="s-mode"><option value="watch">izlenebilir hızlı</option><option value="instant">anında</option><option value="cinematic">sinematik</option></select></label>
+      <label>Hedef süre (sn, 0 = otomatik) <input id="s-sec" type="number" min="0" max="600"></label>
+      <label><input id="s-eff" type="checkbox"> Toz ve ses efektleri</label>
+      <label><input id="s-cel" type="checkbox"> Bitişte kutlama</label>
+      <label>Model <select id="s-model"><option value="auto">otomatik (yeni yapı Opus, küçük iş Sonnet)</option><option value="opus">hep Opus</option><option value="sonnet">hep Sonnet</option></select></label>
+      <button id="s-save" class="primary">Kaydet</button>
+    </div>
+    <div id="tab-health" class="tab card hidden"></div>
+  </section>
+</main>
+<footer class="muted">Yalnız bu bilgisayar (127.0.0.1). Dünyadaki yazılar talimat sayılmaz. Her değişiklik geri alınabilir.</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

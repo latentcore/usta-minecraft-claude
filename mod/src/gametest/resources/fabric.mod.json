@@ -1,0 +1,11 @@
+{
+	"schemaVersion": 1,
+	"id": "usta-test",
+	"version": "0.1.0",
+	"name": "Usta testleri",
+	"environment": "*",
+	"entrypoints": {
+		"fabric-gametest": ["dev.usta.test.SmokeGameTest"],
+		"fabric-client-gametest": ["dev.usta.test.SmokeClientGameTest", "dev.usta.test.ScenarioClientGameTest"]
+	}
+}

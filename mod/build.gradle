@@ -1,0 +1,126 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+version = project.version
+group = project.group
+
+base {
+	archivesName = 'usta'
+}
+
+repositories {
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = 'Modrinth'
+				url = 'https://api.modrinth.com/maven'
+			}
+		}
+		filter {
+			includeGroup 'maven.modrinth'
+		}
+	}
+}
+
+// -Pusta.perf=true ile gelistirme calistirmalarina Sodium/Lithium/FerriteCore eklenir (S8, Q14).
+def withPerfMods = project.findProperty('usta.perf') == 'true'
+
+loom {
+	splitEnvironmentSourceSets()
+
+	mods {
+		"usta" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+
+	runs {
+		harness {
+			server()
+			name "Usta Harness"
+			runDir "run/harness"
+			vmArg '-Dusta.testHarness=true'
+			programArgs 'nogui'
+		}
+		configureEach {
+			// Gelistirme istemcisi kullanicinin ekranini kaplamasin: gizli pencere (bkz. WindowHideMixin).
+			vmArg '-Dusta.dev.hiddenWindow=' + (project.findProperty('usta.visible') == 'true' ? 'false' : 'true')
+			vmArg '-Xmx3G'
+		}
+	}
+}
+
+loom.runs.configureEach {
+	if (name == 'clientGameTest') {
+		vmArg '-Dusta.scenario=' + (project.findProperty('usta.scenario') ?: '')
+		vmArg '-Dusta.scenarioMinutes=' + (project.findProperty('usta.scenarioMinutes') ?: '10')
+		vmArg '-Dusta.seed=' + (project.findProperty('usta.seed') ?: '')
+	}
+}
+
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = 'usta-test'
+		enableGameTests = true
+		enableClientGameTests = true
+		eula = true // K1: yalniz bu bilgisayardaki test sunucusu icin (oyuncunun izni).
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	if (withPerfMods) {
+		runtimeOnly "maven.modrinth:sodium:${project.sodium_version}"
+		runtimeOnly "maven.modrinth:lithium:${project.lithium_version}"
+		runtimeOnly "maven.modrinth:ferrite-core:${project.ferritecore_version}"
+	}
+
+	testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
+}
+
+processResources {
+	def version = project.version
+	inputs.property "version", version
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+	}
+}
+
+test {
+	useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+	it.options.encoding = 'UTF-8'
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+	from("../LICENSE") {
+		rename { "${it}_usta" }
+	}
+}
+
+// Uretim kosusu (resmi launcher'daki gibi: Fabric + mods klasoru/addMods; oyuncunun profilindeki jar'larla), teshis icin
+tasks.register("prodClient", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    mods.from(fileTree(dir: (project.findProperty('usta.prodMods') ?: "${System.getProperty('user.home')}/UstaOyun/mods"), include: '*.jar'))
+    jvmArgs.add('-Dusta.dev.hiddenWindow=true')
+    jvmArgs.add('-Dfabric.log.level=debug')
+    programArgs.addAll('--width', '854', '--height', '480')
+}
+tasks.register("prodClientDir", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+    runDir.set(layout.projectDirectory.dir("run/proddir"))     // modlar yalniz gameDir/mods klasorunden (oyuncunun kurulumu gibi)
+    jvmArgs.add('-Dusta.dev.hiddenWindow=true')
+    programArgs.addAll('--width', '854', '--height', '480')
+}
