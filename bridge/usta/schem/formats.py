@@ -152,17 +152,23 @@ def nbt_to_snbt(d: dict) -> str:
     return _tag_to_snbt(d)
 
 
-def _state_compound(s: str) -> dict:
+def _state_compound(s: str, vanilla: bool = False) -> dict:
+    """vanilla=True (yapi sablonu .nbt): 26.x alanlari (id/properties) + eski araclar icin Name/Properties birlikte."""
     name, props = blockdb.split_state(s)
     d = {"Name": name}
     if props:
         d["Properties"] = {k: v for k, v in props.items()}
+    if vanilla:
+        d["id"] = name
+        if props:
+            d["properties"] = {k: v for k, v in props.items()}
     return d
 
 
 def _state_from_compound(c: dict) -> str:
-    name = c.get("Name", "minecraft:air")
-    props = c.get("Properties") or {}
+    # 26.x yapi sablonlari blok durumunu id/properties ile, eski bicimler Name/Properties ile yazar
+    name = c.get("Name") or c.get("id") or "minecraft:air"
+    props = c.get("Properties") or c.get("properties") or {}
     if props:
         return name + "[" + ",".join(f"{k}={v}" for k, v in props.items()) + "]"
     return name
@@ -406,7 +412,7 @@ def export_structure_nbt(plan: Plan) -> bytes:
         ents.append({"pos": N.List(N.DOUBLE, [N.Double(c) for c in p]),
                      "blockPos": N.List(N.INT, [N.Int(int(c // 1)) for c in p]), "nbt": d})
     root = {"DataVersion": N.Int(_data_version()), "size": N.List(N.INT, [N.Int(sx), N.Int(sy), N.Int(sz)]),
-            "palette": N.List(N.COMPOUND, [_state_compound(s) for s in pal]), "blocks": N.List(N.COMPOUND, blocks),
+            "palette": N.List(N.COMPOUND, [_state_compound(s, vanilla=True) for s in pal]), "blocks": N.List(N.COMPOUND, blocks),
             "entities": N.List(N.COMPOUND, ents)}
     return N.dumps(root, "")
 
@@ -414,7 +420,9 @@ def export_structure_nbt(plan: Plan) -> bytes:
 def import_structure_nbt(data: bytes) -> Plan:
     _, root = N.loads(data)
     sx, sy, sz = (int(v) for v in root["size"])
-    pal_raw = [_state_from_compound(c) for c in root["palette"]]
+    # cok paletli sablonlar (gemi enkazi: ahsap cesitleri) "palettes" listesi tasir: ilki kullanilir
+    pal_src = root["palette"] if "palette" in root else (root.get("palettes") or [[]])[0]
+    pal_raw = [_state_from_compound(c) for c in pal_src]
     pal = [KEEP, AIR]
     remap = []
     for s in pal_raw:

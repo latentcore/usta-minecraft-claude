@@ -57,7 +57,8 @@ def _is_light_name(a: str) -> bool:
     return a == "light" or any(k in a for k in LIGHT_KEYS)
 EXEMPT_WINDOW = ("depo", "bodrum", "kiler", "mahzen", "storage", "cellar", "basement", "vault", "hazine", "zindan",
                  "dungeon", "closet", "dolap", "koridor", "corridor", "hall", "merdiven", "stair", "tuvalet", "wc",
-                 "sığınak", "bunker", "kasa")
+                 "sığınak", "bunker", "kasa", "gizli", "secret")
+EXEMPT_SECRET = ("gizli", "secret")     # gizli kapili (meta secret_door) odaya yurunerek degil, kizilatas kapiyla girilir
 EXEMPT_EMPTY = ("koridor", "corridor", "merdiven", "stair", "giriş", "hol", "hall", "antre", "balkon", "teras", "avlu",
                 "courtyard")
 
@@ -1492,6 +1493,48 @@ def c_broken_doors(ctx: Ctx) -> list[Finding]:
     return out
 
 
+@check("door_blocked", "Kapının önü ya da arkası dolu blokla kapalı: kapı duvara açılıyor, geçilemez.", "teknik")
+def c_door_blocked(ctx: Ctx) -> list[Finding]:
+    pf = ctx.P.reshape(-1)
+    walk = np.array([n.endswith(("_stairs", "_slab", "_carpet")) or n in ("carpet", "snow") for n in ctx.names], dtype=bool)
+    ok = pf | walk[ctx.flat]
+    up = ctx.OFF["up"]
+    deco = _meta_cells(ctx, "decor_doors")   # dolap kapagi: gecis kapisi degil
+    bad = []
+    for p in np.flatnonzero(ctx.T["door_lower"]):
+        idx = np.flatnonzero((ctx.ids == p) & ctx.core_mask)
+        idx = idx[~np.isin(idx, deco)] if deco.size else idx
+        f = ctx.props[p].get("facing")
+        if idx.size == 0 or f not in DIRV:
+            continue
+        for d in (f, OPP[f]):
+            n = idx + ctx.OFF[d]
+            bad.append(idx[~ok[n] & ~ok[n + up]])
+    bad = np.unique(np.concatenate(bad)) if bad else np.zeros(0, np.int64)
+    if bad.size == 0:
+        return []
+    return [ctx.finding("door_blocked", "major", f"{bad.size} kapının önü ya da arkası dolu: kapı duvara açılıyor, geçilemez.",
+                        "Kapının önündeki ve arkasındaki iki hücreyi (alt ve üst) boş bırak ya da kapıyı açıklığa taşı.", idx=bad)]
+
+
+@check("window_blocked", "Pencere dört yandan dolu bloklarla kapalı: hiçbir yöne bakmıyor (ışık ve görüş yok).", "estetik")
+def c_window_blocked(ctx: Ctx) -> list[Finding]:
+    g = ctx.cm("glass")
+    if not g.any():
+        return []
+    idx = np.flatnonzero(g)
+    shut = (ctx.T["opaque"] & ~ctx.T["glass"])[ctx.flat]
+    closed = np.ones(idx.size, dtype=bool)
+    for d in ("north", "south", "east", "west"):
+        closed &= shut[idx + ctx.OFF[d]]
+    # tavan/zemin penceresi (ustu ya da alti acik) yukari/asagi bakar: kapali degil
+    closed &= shut[idx + ctx.OFF["up"]] & shut[idx + ctx.OFF["down"]]
+    if not closed.any():
+        return []
+    return [ctx.finding("window_blocked", "minor", f"{int(closed.sum())} pencere camı dört yandan duvarla kapalı (dışarı bakmıyor).",
+                        "Camı dış duvar düzlemine taşı ya da önündeki/arkasındaki bloğu kaldır.", idx=idx[closed])]
+
+
 @check("broken_beds", "Yatağın baş ya da ayak parçası eksik veya yönü uyumsuz.", "teknik")
 def c_broken_beds(ctx: Ctx) -> list[Finding]:
     def off(pr):
@@ -1617,13 +1660,17 @@ def c_stair_walkability(ctx: Ctx) -> list[Finding]:
     nearh = nearh.reshape(-1)
     cov = (~ctx.outdoorish).reshape(-1)
     face = _stair_tables(ctx)
-    steps, lower = [], []
+    steps, lower, dead = [], [], []
+    names_ = ctx.names
+    cap = np.array([n.endswith(("_stairs", "_slab")) for n in names_], dtype=bool)[ctx.flat]
     for ai, bi, d in _stair_pairs(ctx):
         want = HORIZ.index(d)
         ok = (face[ctx.flat[ai]] == want)
         steps.append(ai[ok])
         steps.append(bi[ok])
-        lower.append(ai[ok])                 # ustunde bir sonraki basamak olan (en ust olmayan) basamaklar
+        lower.append((ai[ok], bi[ok]))       # (alt basamak, ustundeki bir sonraki basamak)
+        # ust basamagin hemen ustu basamak/yarim blokla kapaliysa bu dizi yurunen merdiven degil (kademeli kutle, oturma)
+        dead.append(ai[ok][cap[bi[ok] + ctx.OFF["up"]]])
     if steps:
         s = np.unique(np.concatenate(steps))
         s = s[ctx.core_mask.reshape(-1)[s]]
@@ -1633,20 +1680,50 @@ def c_stair_walkability(ctx: Ctx) -> list[Finding]:
         rel = near[up1] | (cov[up1] & nearh[s])
         PW = P | ctx.m("fluid").reshape(-1)   # havuz basamagi: ustu su = yuzulebilir bosluk
         rel &= ~ctx.m("fluid").reshape(-1)[up1]
+        # cephe kabartmasi (pencere cevresi, korniş): iki yani ve arkasi dolu, ustu kapali basamak yurunen merdiven degildir
+        full = (ctx.T["full"] & ~ctx.T["stairs"])[ctx.flat]
+        fs = face[ctx.flat[s]]
+        relief = np.zeros(s.size, dtype=bool)
+        for k, dname in enumerate(HORIZ):
+            m = fs == k
+            if not m.any():
+                continue
+            left, right = HORIZ[(k + 1) % 4], HORIZ[(k + 3) % 4]
+            si = s[m]
+            relief[m] = full[si + ctx.OFF[left]] & full[si + ctx.OFF[right]] & full[si + ctx.OFF[dname]] & ~P[si + ctx.OFF["up"]]
+        rel &= ~relief
+        # dogrudan ustu basamak/yarim blokla kapali basamak (kademeli kutle) ve kapali basamaga cikan basamak yurunmez
+        rel &= ~cap[up1]
+        if dead:
+            rel &= ~np.isin(s, np.concatenate(dead))
         bad = rel & ~(PW[up1] & PW[up2])
         if bad.any():
             out.append(ctx.finding("stair_walkability", "critical", f"{int(bad.sum())} merdiven basamağının üstünde 2 blok baş boşluğu yok: oyuncu ancak eğilerek ya da hiç geçemez.",
                                    "Her basamağın üstünde 3 blok boşluk bırak; üst katın döşemesini merdiven boyunca aç (parts.staircase bunu yapar).", idx=s[bad]))
-        # bir ust basamaga cikarken govde onceki basamagin ustune tasar: orada 3. blok da bos olmali (yoksa kafa carpar)
-        lo = np.unique(np.concatenate(lower)) if lower else np.zeros(0, np.int64)
+        # bir ust basamaga cikarken govde onceki basamagin ustune tasar: orada 3. blok da bos olmali (yoksa kafa carpar);
+        lo = np.unique(np.concatenate([p[0] for p in lower]))
         lo_mask = np.isin(s, lo)
-        bad3 = rel & ~bad & lo_mask & ~PW[up3]
+        # acik havada yana dogru >=4 basamaklik sira (kosede saçak basamagi dahil) cati egimidir:
+        # komsu catinin sacagi 3. bloga girse de yurunen merdiven degil
+        st_ = ctx.T["stairs"][ctx.flat]
+        run = np.ones(s.size, dtype=np.int64)
+        for k in range(4):
+            m = fs == k
+            if not m.any():
+                continue
+            for side in (HORIZ[(k + 1) % 4], HORIZ[(k + 3) % 4]):
+                cont = np.ones(int(m.sum()), dtype=bool)
+                for j in range(1, 4):
+                    cont &= st_[s[m] + j * ctx.OFF[side]]
+                    run[np.flatnonzero(m)[cont]] += 1
+        roof = (run >= 4) & ~cov[up1]
+        bad3 = rel & ~bad & lo_mask & ~PW[up3] & ~roof
         if bad3.any():
             out.append(ctx.finding("stair_walkability", "critical", f"{int(bad3.sum())} basamakta yukarı çıkarken kafa çarpar: basamağın üstündeki 3. blok dolu.",
                                    "Merdiven boşluğunu bir blok daha erken aç: üst kat döşemesini/tavanı basamakların üstünde 3 blok yükseklikte kaldır.", idx=s[bad3]))
     rooms_f = []
     for r in ctx.used_rooms():
-        if r.sealed or r.walk or not r.standable:
+        if r.sealed or r.walk or not r.standable or (ctx.meta.get("secret_door") and _exempt(r, EXEMPT_SECRET)):
             continue
         rooms_f.append(ctx.finding("stair_walkability", "major",
                                f"'{r.name}' odasına havadan bağlantı var ama yürüyerek ulaşılamıyor (merdiven/ladder/basamak eksik ya da 1 bloktan yüksek).",

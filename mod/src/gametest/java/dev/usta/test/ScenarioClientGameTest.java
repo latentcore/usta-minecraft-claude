@@ -48,6 +48,16 @@ public class ScenarioClientGameTest implements FabricClientGameTest {
 				if (overlay) return;
 				log(msg.getString());
 			});
+			// istemciye gelen sesler (ses kapaliyken de: dinleyici sessizlik kontrolunden once cagrilir); yalniz test edilenler
+			context.runOnClient(mc -> mc.getSoundManager().addListener((sound, events, range) -> {
+				String id = String.valueOf(sound.getIdentifier());
+				for (String k : List.of("explode", "explosion", "note_block", "door", "button", "pressure_plate", "lever", "piston", "bell")) {
+					if (id.contains(k)) {
+						log("[ses] " + id);
+						return;
+					}
+				}
+			}));
 		}
 		var builder = context.worldBuilder();
 		if (!seed.isEmpty()) {
@@ -81,6 +91,8 @@ public class ScenarioClientGameTest implements FabricClientGameTest {
 					String fc = cmd;
 					if (fc.startsWith("server ")) {
 						sp.getServer().runCommand(fc.substring(7));
+					} else if (fc.startsWith("client:")) {
+						client(context, fc.substring(7).trim());
 					} else {
 						context.runOnClient(mc -> mc.player.connection.sendCommand(fc));
 					}
@@ -89,6 +101,31 @@ public class ScenarioClientGameTest implements FabricClientGameTest {
 			}
 		} catch (IOException e) {
 			throw new RuntimeException(e);
+		}
+	}
+
+	/** client:particles -> parcacik sayisi; client:render N -> gorus mesafesi (parca); client:use x y z [yuz] -> oyuncu o bloga sag tiklar (dugme, kol, kapi). */
+	private static void client(ClientGameTestContext context, String cmd) {
+		String[] a = cmd.split("\\s+");
+		if (a[0].equals("particles")) {
+			context.runOnClient(mc -> log("[parcacik] " + mc.particleEngine.countParticles()));
+		} else if (a[0].equals("render") && a.length >= 2) {
+			int n = Integer.parseInt(a[1]);
+			context.runOnClient(mc -> {
+				mc.options.renderDistance().set(n);
+				log("[gorus] " + mc.options.renderDistance().get());
+			});
+		} else if (a[0].equals("use") && a.length >= 4) {
+			net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
+			net.minecraft.core.Direction face = a.length >= 5 ? net.minecraft.core.Direction.byName(a[4]) : net.minecraft.core.Direction.UP;
+			net.minecraft.core.Direction f = face == null ? net.minecraft.core.Direction.UP : face;
+			context.runOnClient(mc -> {
+				var hit = new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(pos), f, pos, false);
+				var r = mc.gameMode.useItemOn(mc.player, net.minecraft.world.InteractionHand.MAIN_HAND, hit);
+				log("[kullan] " + pos.toShortString() + " -> " + r);
+			});
+		} else {
+			log("[client] bilinmeyen: " + cmd);
 		}
 	}
 

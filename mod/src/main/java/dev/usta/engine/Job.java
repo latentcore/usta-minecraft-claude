@@ -68,6 +68,7 @@ public final class Job {
 	public long finishedAt;
 	public String source = "api";
 	public String requestId;
+	public String group;  // ayni gruptaki isler tek /usta geri ile birlikte geri alinir (cok parcali yapilar)
 	public String refJob; // UNDO/REDO icin hedef is
 	public String message;
 	public boolean allowModify;
@@ -97,6 +98,8 @@ public final class Job {
 	public long sumTickNanos;
 	public long tickSamples;
 	public int unsupported;
+	public final java.util.List<String> unsupportedSamples = new java.util.ArrayList<>(); // ilk birkac desteksiz blok: "x,y,z blok"
+	public final java.util.List<String> conflictSamples = new java.util.ArrayList<>();    // dokunulacak ilk birkac yapi blogu: "x,y,z blok"
 	public int settledChanged;
 	public int lastJournalCursor;
 	public long lastJournalMs;

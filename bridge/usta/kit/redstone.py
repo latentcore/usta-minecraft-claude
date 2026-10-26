@@ -1,5 +1,5 @@
-"""Kizilatas (redstone) mekanizmalari: vanilla kurallarla calisan kucuk devreler. Oyunda denenen: hidden_piston_door
-(kol ac -> kapi bos, kapa -> dolu; KANIT/oyun). Digerleri oyunda denenmedi: ajan bunlari kurunca "denenmedi" der.
+"""Kizilatas (redstone) mekanizmalari: vanilla kurallarla calisan kucuk devreler. Yedisi de oyunda gercek oyuncu
+etkilesimiyle denendi (26 Ekim; dugme/kol: istemciden sag tik, plaka: ustune cikma, gun isigi: saat; KANIT/acik_isler_2026-10-26).
 Her fonksiyon Build'e bloklari yazar ve b.meta["redstone"] listesine bir kayit ekler:
   {"kind", "trigger": [x,y,z] (kol/dugme/plaka), "outputs": [[x,y,z]...], "closed": durum aciklamasi}
 Motor yerlestirme bittiginde devreleri bir kez "uyandirir" (komsu guncellemesi), boylece guc durumlari oyunun kendi
@@ -11,7 +11,7 @@ Mekanizmalar (MECHANISMS):
   iron_door_buttons   Demir kapi + iki yanda dugme (yalniz kizilatasla acilir).
   pressure_door       Basinc plakali otomatik demir kapi (iki yanda plaka).
   night_lamps         Gun isigi algilayici (ters) + kizilatas lambalar: gece kendiliginden yanar.
-  lever_lights        Kol + tel hattı + kizilatas lambalar (oda isigi anahtari).
+  lever_lights        Kol + tel hatti; lambalar telin altinda zemine gomulu (oda/yol isigi anahtari).
   doorbell            Dugme + nota blogu (kapi zili).
   secret_hatch        Demir tuzak kapi + kol (gizli zemin kapagi).
 """
@@ -122,17 +122,18 @@ def night_lamps(b: Build, x: int, y: int, z: int, lamps: list | None = None) -> 
 
 
 def lever_lights(b: Build, x: int, y: int, z: int, length: int = 6, axis: str = "x", lamp_every: int = 3) -> dict:
-    """Zeminde (y) kol + tel hatti + aralikli kizilatas lambalar. (x,y,z) kolun hucresi (y = zemin + 1)."""
+    """Zeminde kol + tel hatti; aralikli kizilatas lambalar telin ALTINDA, zemine gomulu (tel ustunde durdugu blogu besler,
+    hat lambalarin ustunden kesintisiz gecer: hepsi yanar). (x,y,z) kolun hucresi (y = zemin + 1); lambalar y-1'de.
+    (Lamba hattin icinde olsaydi yalniz ilki yanardi: telle beslenen lamba sonraki teli beslemez; oyunda denendi.)"""
     b.set(x, y, z, "lever[face=floor,facing=east,powered=false]")
     outs = []
     for k in range(1, length + 1):
         X, Z = (x + k, z) if axis == "x" else (x, z + k)
+        b.set(X, y, Z, "redstone_wire[east=side,west=side,north=none,south=none,power=0]" if axis == "x"
+              else "redstone_wire[north=side,south=side,east=none,west=none,power=0]")
         if k % lamp_every == 0:
-            b.set(X, y, Z, "redstone_lamp[lit=false]")
-            outs.append((X, y, Z))
-        else:
-            b.set(X, y, Z, "redstone_wire[east=side,west=side,north=none,south=none,power=0]" if axis == "x"
-                  else "redstone_wire[north=side,south=side,east=none,west=none,power=0]")
+            b.set(X, y - 1, Z, "redstone_lamp[lit=false]")
+            outs.append((X, y - 1, Z))
     return _rec(b, "lever_lights", (x, y, z), outs)
 
 

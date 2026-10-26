@@ -77,6 +77,14 @@ public final class JobManager {
 		return new ArrayList<>(queue);
 	}
 
+	/** Bu gecmis kaydi icin kuyrukta bekleyen ya da suren bir geri alma/yineleme var mi (ayni is iki kez geri alinmasin). */
+	public synchronized boolean pendingFor(String entryId) {
+		Job a = active;
+		if (a != null && !a.finished() && a.kind != Job.Kind.BUILD && entryId.equals(a.refJob)) return true;
+		for (Job q : queue) if (q.kind != Job.Kind.BUILD && entryId.equals(q.refJob)) return true;
+		return false;
+	}
+
 	static String newId() {
 		return Long.toString(System.currentTimeMillis(), 36) + "-" + UUID.randomUUID().toString().substring(0, 6);
 	}
@@ -435,6 +443,10 @@ public final class JobManager {
 				if (!insideAny(j.ownBoxes, p)) {
 					j.aArtificial++;
 					if (t.isAir()) j.aArtificialRemoved++;
+					if (j.conflictSamples.size() < 8) {
+						j.conflictSamples.add(p.getX() + "," + p.getY() + "," + p.getZ() + " "
+							+ net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(b.getBlock()));
+					}
 				}
 			} else if (t.isAir() && b.getFluidState().isEmpty()) {
 				j.aNaturalRemoved++;
@@ -456,7 +468,8 @@ public final class JobManager {
 			return;
 		}
 		if (artificial > 0 && !j.allowModify && j.kind == Job.Kind.BUILD) {
-			j.message = "var olan bir yapının " + artificial + " bloğuna dokunacaktı; açıkça istenmedikçe yapılmaz (allow_modify)";
+			String eg = j.conflictSamples.isEmpty() ? "" : " (ör. " + j.conflictSamples.get(0).replace("minecraft:", "") + ")";
+			j.message = "var olan bir yapının " + artificial + " bloğuna dokunacaktı" + eg + "; açıkça istenmedikçe yapılmaz (allow_modify)";
 			finish(j, Job.State.FAILED);
 			return;
 		}
@@ -656,7 +669,13 @@ public final class JobManager {
 			int f = Physics.cachedFlags(t);
 			if ((f & (Physics.SUPPORT_FLOOR | Physics.SUPPORT_WALL | Physics.SUPPORT_CEIL)) == 0) continue;
 			pos(j, j.idx[k], p);
-			if (!t.canSurvive(j.level, p)) j.unsupported++;
+			if (!t.canSurvive(j.level, p)) {
+				j.unsupported++;
+				if (j.unsupportedSamples.size() < 8) {
+					j.unsupportedSamples.add(p.getX() + "," + p.getY() + "," + p.getZ() + " "
+						+ net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(t.getBlock()));
+				}
+			}
 			if ((k & 1023) == 0 && System.nanoTime() - t0 > 25_000_000L) return;
 		}
 		j.state = Job.State.ENTITIES;
@@ -718,6 +737,7 @@ public final class JobManager {
 			e.changed = j.cursor;
 			e.source = j.source;
 			e.request = j.requestId;
+			e.group = j.group;
 			if (st == Job.State.CANCELLED) {
 				// kismi is: geri alma yalniz yerlestirilen kismi kapsar
 				truncate(j);
@@ -932,6 +952,16 @@ public final class JobManager {
 		if (j.message != null) o.addProperty("message", j.message);
 		o.add("conflicts", j.conflicts);
 		o.addProperty("unsupported", j.unsupported);
+		if (!j.unsupportedSamples.isEmpty()) {
+			JsonArray us = new JsonArray();
+			j.unsupportedSamples.forEach(us::add);
+			o.add("unsupported_samples", us);
+		}
+		if (!j.conflictSamples.isEmpty()) {
+			JsonArray cs = new JsonArray();
+			j.conflictSamples.forEach(cs::add);
+			o.add("conflict_samples", cs);
+		}
 		o.addProperty("settled_changed", j.settledChanged);
 		o.addProperty("redstone_woke", j.redstoneWoke);
 		o.addProperty("moved_entities", j.moved.size());

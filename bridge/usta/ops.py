@@ -88,8 +88,13 @@ def context(radius: int = 48, request_id: str | None = None, terrain_radius: int
 def map_view(center: tuple[int, int] | None = None, radius: int = 64, request_id: str | None = None,
              footprints: list[dict] | None = None, title: str | None = None) -> tuple[dict, bytes, str]:
     api = game()
-    ctx = api.context(16)
-    anc = anchor_for(api, request_id) or {"x": ctx["player"]["x"], "z": ctx["player"]["z"], "yaw": ctx["player"]["yaw"]}
+    try:
+        ctx = api.context(16)
+        anc = anchor_for(api, request_id) or {"x": ctx["player"]["x"], "z": ctx["player"]["z"], "yaw": ctx["player"]["yaw"]}
+    except GameError:
+        if center is None:
+            raise
+        anc = None                                    # oyuncusuz dunya (test sunucusu): merkez verildiyse harita yine cizilir
     if center is None:
         center = (int(math.floor(anc["x"])), int(math.floor(anc["z"])))
     radius = int(max(8, min(256, radius)))

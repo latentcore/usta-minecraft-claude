@@ -1,4 +1,4 @@
-"""Oyun ici yardimci komutlar (mod baslatir: python -m usta.tools <is> [arg]):
+"""Oyun ici yardimci komutlar (mod baslatir: python -m usta.tools <is> [arg]): kod, kopyala, yapistir, cevre, aynala, dondur,
 foto [is_id], harita, kaydet <is_id> [ad], kutuphane, panel. Sonuclari oyun sohbetine yazar."""
 from __future__ import annotations
 
@@ -108,6 +108,92 @@ def panel(api: GameAPI) -> dict:
     return {"ok": True}
 
 
+def _looked_box(api: GameAPI) -> list[int] | None:
+    from . import edit
+    la = api.context(8).get("looking_at")
+    if not la:
+        api.chat("Bir yapıya bak, sonra tekrar dene.", "warn")
+        return None
+    det = edit.detect(api, *la["pos"])
+    if not det.get("ok"):
+        api.chat(det.get("message", "Baktığın yerde yapı bulunamadı."), "warn")
+        return None
+    return det["box"]
+
+
+def _code_line(st: dict) -> str:
+    oz = st.get("ozet") or {}
+    return (f"{st['cells']:,} hücre → {st['body_lines']} satır" + (f", parçalar %{oz.get('parca_yuzde')}" if oz else "")
+            + (", birebir ✓" if st.get("exact") else ", BİREBİR DEĞİL")).replace(",", ".", 1)
+
+
+def kod(api: GameAPI) -> dict:
+    from . import cevre
+    box = _looked_box(api)
+    if box is None:
+        return {"ok": False}
+    code, st, path = cevre.structure_code(api, box)
+    api.chat(f"Yapı koda çevrildi: {_code_line(st)}. Dosya: {path.name} (usta/calisma/kod)", "soft")
+    return {"ok": bool(st.get("exact")), "file": str(path), "stats": {k: st.get(k) for k in ("cells", "body_lines", "exact", "parca_yuzde")}}
+
+
+def kopyala(api: GameAPI) -> dict:
+    from . import cevre
+    box = _looked_box(api)
+    if box is None:
+        return {"ok": False}
+    code, st, path = cevre.structure_code(api, box)
+    if not st.get("exact"):
+        api.chat("Kopya birebir doğrulanamadı; panoya konmadı.", "error")
+        return {"ok": False}
+    cevre.save_clipboard(code, {"box": box, "cells": st["cells"]})
+    api.chat(f"Kopyalandı ({_code_line(st)}). Kurmak için bak ve: /usta yapıştır", "soft")
+    return {"ok": True, "box": box}
+
+
+def yapistir(api: GameAPI) -> dict:
+    from . import cevre
+    plan, box = cevre.paste_plan(api)
+    j = cevre.submit_and_wait(api, plan, "Usta yapıştır")
+    if j.get("state") == "DONE":
+        api.chat(f"Yapıştırıldı: {box[0]},{box[1]},{box[2]} (geri almak için /usta geri).", "soft")
+        return {"ok": True, "box": box}
+    api.chat("Yapıştırılamadı: " + (j.get("message") or j.get("state") or "?") + " (önü boş bir yere bakıp tekrar dene)", "warn")
+    return {"ok": False, "job": j}
+
+
+def cevre_(api: GameAPI) -> dict:
+    from . import cevre
+    s = cevre.survey(api, 64)
+    if not s["structures"]:
+        api.chat("64 blok içinde yapı bulamadım.", "soft")
+        return s
+    parts = [f"{i + 1}) {it['size'][0]}x{it['size'][2]}, {it['style']}, {it['distance']:.0f} blok ötede" for i, it in enumerate(s["structures"][:8])]
+    api.chat(f"Çevrende {s['count']} yapı: " + " · ".join(parts), "soft")
+    try:
+        fps = [{"x0": it["box"][0], "z0": it["box"][2], "x1": it["box"][3], "z1": it["box"][5], "facing": "north"} for it in s["structures"][:8]]
+        info, data, _ = ops.map_view(None, 64, footprints=fps, title="Usta çevre")
+        shots = config.game_dir() / "screenshots" / "usta"
+        shots.mkdir(parents=True, exist_ok=True)
+        dst = shots / ("cevre-" + time.strftime("%Y%m%d-%H%M%S") + ".jpg")
+        dst.write_bytes(data)
+        api.chat(f"Harita: {dst.name}", "soft", [{"label": "Aç", "command": f"/usta ac {dst.name}", "hover": "Çevre haritasını aç"}])
+    except Exception:  # noqa: BLE001  (harita yardimci; liste zaten verildi)
+        pass
+    return s
+
+
+def donustur(api: GameAPI, op: str, arg: str | None) -> dict:
+    from . import cevre
+    plan, box, info = cevre.transform_last(api, op, arg)
+    j = cevre.submit_and_wait(api, plan, f"Usta {info['what']}", allow_modify=True)
+    if j.get("state") == "DONE":
+        api.chat(f"Son yapı {info['what']} (geri almak için /usta geri).", "soft")
+        return {"ok": True}
+    api.chat("Yapılamadı: " + (j.get("message") or j.get("state") or "?"), "warn")
+    return {"ok": False, "job": j}
+
+
 def main() -> None:
     what = sys.argv[1] if len(sys.argv) > 1 else ""
     arg = sys.argv[2] if len(sys.argv) > 2 else None
@@ -123,6 +209,16 @@ def main() -> None:
             r = kutuphane(api)
         elif what == "panel":
             r = panel(api)
+        elif what == "kod":
+            r = kod(api)
+        elif what == "kopyala":
+            r = kopyala(api)
+        elif what == "yapistir":
+            r = yapistir(api)
+        elif what == "cevre":
+            r = cevre_(api)
+        elif what in ("aynala", "dondur"):
+            r = donustur(api, what, arg)
         else:
             r = {"ok": False, "message": f"bilinmeyen iş: {what}"}
     except Exception as e:  # noqa: BLE001

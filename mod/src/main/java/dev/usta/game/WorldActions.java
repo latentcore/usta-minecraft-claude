@@ -15,6 +15,13 @@ import net.minecraft.world.level.saveddata.WeatherData;
  * Zaman, hava ve isinlanma: yalniz acik istekle (M2); her degisiklik tek cumleyle bildirilir ve geri alinabilir.
  */
 public final class WorldActions {
+	/** Claude'un calistirabilecegi oyun komutlari. Yonetici/sunucu komutlari (op, stop, ban, reload, save…) yok; blok yazan
+	 * komutlar (fill, setblock, clone, place) da yok: dunya degisikligi her zaman geri alinabilir Usta planiyla yapilir. */
+	static final Set<String> ALLOWED_COMMANDS = Set.of("give", "effect", "summon", "gamerule", "difficulty", "xp", "experience",
+		"enchant", "tp", "teleport", "time", "weather", "playsound", "stopsound", "particle", "title", "clear", "item", "attribute",
+		"spawnpoint", "setworldspawn", "locate", "tellraw", "ride", "tag", "gamemode", "worldborder", "random", "rotate", "loot",
+		"spreadplayers", "recipe", "advancement");
+
 	private WorldActions() {}
 
 	private static long targetTimeOfDay(String s) {
@@ -90,10 +97,83 @@ public final class WorldActions {
 				data.addProperty("dim", lvl.dimension().identifier().toString());
 				say = "Seni ışınladım. Geri alınabilir.";
 			}
+			case "command" -> {
+				// oyun komutu kapisi: yalniz izinli komutlar; cikti geri doner. Komutlar geri alinamaz (oyuncu istediyse calisir).
+				String cmd = b.get("command").getAsString().trim();
+				if (cmd.startsWith("/")) cmd = cmd.substring(1);
+				String root = cmd.split("\\s+", 2)[0].toLowerCase(java.util.Locale.ROOT);
+				if (root.equals("kill") || root.equals("damage")) {
+					return fail(res, "Canlı silmek/yaralamak için remove_entities kullan (oyuncu, evcil, adlı ve köylüler korunur).");
+				}
+				if (!ALLOWED_COMMANDS.contains(root)) {
+					return fail(res, "Bu komuta izin yok: " + root + ". İzinli: " + String.join(", ", new java.util.TreeSet<>(ALLOWED_COMMANDS)));
+				}
+				java.util.List<String> out = new java.util.ArrayList<>();
+				net.minecraft.commands.CommandSource cap = new net.minecraft.commands.CommandSource() {
+					@Override
+					public void sendSystemMessage(net.minecraft.network.chat.Component message) {
+						if (out.size() < 40) out.add(message.getString());
+					}
+
+					@Override
+					public boolean acceptsSuccess() {
+						return true;
+					}
+
+					@Override
+					public boolean acceptsFailure() {
+						return true;
+					}
+
+					@Override
+					public boolean shouldInformAdmins() {
+						return false;
+					}
+				};
+				net.minecraft.commands.CommandSourceStack st = u.server.createCommandSourceStack().withSource(cap);
+				ServerPlayer p = u.player();
+				if (p != null) st = st.withEntity(p).withPosition(p.position()).withLevel(p.level()).withRotation(p.getRotationVector());
+				u.server.getCommands().performPrefixedCommand(st, cmd);
+				data.addProperty("command", cmd);
+				com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
+				out.forEach(arr::add);
+				data.add("output", arr);
+				say = "Komut: /" + cmd + (out.isEmpty() ? "" : " → " + out.get(out.size() - 1));
+			}
+			case "entities_remove" -> {
+				// canli temizleme: oyuncu, evcil, adli, koylu ve yardimcilar (EntityGuard) hic silinmez
+				ServerPlayer p = u.player();
+				ServerLevel lvl = b.has("dim") ? u.jobs.levelOf(b.get("dim").getAsString()) : (p != null ? p.level() : u.server.overworld());
+				double cx = b.has("x") ? b.get("x").getAsDouble() : (p != null ? p.getX() : 0);
+				double cy = b.has("y") ? b.get("y").getAsDouble() : (p != null ? p.getY() : 64);
+				double cz = b.has("z") ? b.get("z").getAsDouble() : (p != null ? p.getZ() : 0);
+				double r = Math.max(1, Math.min(96, b.has("radius") ? b.get("radius").getAsDouble() : 24));
+				java.util.Set<String> types = new java.util.HashSet<>();
+				if (b.has("types")) b.getAsJsonArray("types").forEach(t -> types.add(t.getAsString().contains(":") ? t.getAsString() : "minecraft:" + t.getAsString()));
+				if (types.isEmpty()) return fail(res, "Hangi canlılar? types ver (ör. [\"zombie\"] ya da [\"hostile\"]).");
+				boolean hostile = types.remove("minecraft:hostile");
+				net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(cx - r, cy - r, cz - r, cx + r, cy + r, cz + r);
+				int removed = 0, skipped = 0;
+				for (net.minecraft.world.entity.Entity en : lvl.getEntities((net.minecraft.world.entity.Entity) null, box, en -> en.isAlive())) {
+					String id = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(en.getType()).toString();
+					boolean match = types.contains(id) || (hostile && en instanceof net.minecraft.world.entity.monster.Enemy);
+					if (!match) continue;
+					if (en instanceof net.minecraft.world.entity.player.Player || dev.usta.world.EntityGuard.isProtected(en)) {
+						skipped++;
+						continue;
+					}
+					en.discard();
+					removed++;
+				}
+				data.addProperty("removed", removed);
+				data.addProperty("protected_skipped", skipped);
+				say = removed + " canlı kaldırıldı" + (skipped > 0 ? " (" + skipped + " korunan canlıya dokunulmadı)" : "") + ".";
+			}
 			default -> {
 				return fail(res, "Bilinmeyen işlem: " + action);
 			}
 		}
+		boolean undoable = !action.equals("command") && !action.equals("entities_remove");
 		History.Entry e = new History.Entry();
 		e.id = Long.toString(System.currentTimeMillis(), 36) + "-" + UUID.randomUUID().toString().substring(0, 6);
 		e.kind = "ACTION";
@@ -102,13 +182,21 @@ public final class WorldActions {
 		e.label = switch (action) {
 			case "time" -> "zaman";
 			case "weather" -> "hava";
+			case "command" -> "komut";
+			case "entities_remove" -> "canlı temizleme";
 			default -> "ışınlanma";
 		};
 		e.state = "DONE";
 		e.created = e.finished = System.currentTimeMillis();
 		e.source = b.has("source") ? b.get("source").getAsString() : "api";
-		u.history.put(e);
-		Chat.toAll(u.server, Chat.withButtons(Chat.soft(say), java.util.List.of(Chat.Button.run("Geri al", "/usta geri " + e.id, "Bu değişikliği geri al"))));
+		if (undoable) {
+			u.history.put(e);
+			Chat.toAll(u.server, Chat.withButtons(Chat.soft(say), java.util.List.of(Chat.Button.run("Geri al", "/usta geri " + e.id, "Bu değişikliği geri al"))));
+		} else {
+			// geri alinamaz: gecmise yazilmaz (sahte "Geri al" dugmesi olmasin), mod gunlugune yazilir
+			dev.usta.UstaMod.LOG.info("Usta {} ({}): {}", e.label, e.source, data);
+			Chat.toAll(u.server, Chat.soft(say));
+		}
 		res.addProperty("ok", true);
 		res.addProperty("id", e.id);
 		res.add("data", data);

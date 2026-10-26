@@ -35,7 +35,7 @@ It has two parts:
 | part | where | what it does |
 |---|---|---|
 | Fabric mod | `mod/` (Java 25) | a local API on 127.0.0.1, a tick-budgeted build engine, persistent undo and redo, protected regions, the `/claude` and `/usta` commands |
-| Python bridge | `bridge/usta/` | runs Claude through the Claude Code CLI, the building kit, the preview renderer, the auditor, and an MCP server with 38 tools |
+| Python bridge | `bridge/usta/` | runs Claude through the Claude Code CLI, the building kit, the preview renderer, the auditor, the structure-to-code converter, and an MCP server with 43 tools |
 
 ## What it can do
 
@@ -46,17 +46,30 @@ It has two parts:
 - **Pick the model and the effort.** By default a new building goes to Opus and a small edit to Sonnet. Put
   `!opus`, `!sonnet`, `!haiku` or `!fable` at the start to choose, and `!düşük`, `!orta`, `!yüksek`, `!çokyüksek` or
   `!max` for the thinking level: `/claude !opus !max önüme devasa bir saray yap`.
-- **Check before it builds.** 36 automatic checks: support, walkable doors and stairs (with 3 blocks of head room),
+- **Check before it builds.** 38 automatic checks: support, walkable door fronts and stairs (with 3 blocks of head room),
   lighting, roofs, windows, palette, terrain and water. Claude fixes what it can before building and tells you
   about any finding it could not clear.
 - **Edit what is already there.** "Add a floor", "where is the furniture?", "put doors in", "rebuild it properly":
   Usta finds the building you mean and changes it.
+- **Turn what exists into code.** `/usta kod` converts the building you look at (yours or one the game generated:
+  a house, a village, a temple) into lossless, readable Python: boxes, loops, symmetry, split into WALLS, WINDOWS,
+  DOORS, ROOF and FURNITURE sections, and verified block by block by running it (1,511 of the game's 1,511 natural
+  structures round-trip exactly). `/usta kopyala` + `/usta yapıştır` copy a building in front of you; `/usta aynala`
+  and `/usta döndür` mirror or rotate the last one in place.
+- **See the big picture.** `/usta çevre` lists and maps the buildings around you; Claude uses it to place new ones
+  and picks on its own whether to look at a picture, the code, or both.
+- **Run the game itself, if you ask.** Requests like items, effects, enchantments or summoning go through an
+  allow-listed command gate; creatures can be counted and removed (players, pets, named mobs and villagers are
+  protected). These cannot be undone, so Claude only uses them when you ask.
 - **Undo everything.** `/usta geri` undoes the last job, including explosions. Big removals wait for one click of
   confirmation.
 - **One command, 14.4 million blocks.** `/usta stadyum` builds a ready-made 705 × 589 arena with about
   105,000 seats in front of you, without calling Claude. It levels hills, fills holes and water, and moves aside if
   something is already standing there. `/usta stadyum zorla` builds exactly where you are.
-- **Work from Claude Code too.** Say "in Minecraft, …" in any Claude Code session and it uses the same 38 MCP tools.
+- **One command, a heart island.** `/usta ada` builds a 2.1 million block resort island where you stand, facing
+  where you look: it fills the sea or digs a lagoon on land, leaves underwater ruins alone and slides aside if
+  something is in the way. One `/usta geri` undoes all 14 parts together.
+- **Work from Claude Code too.** Say "in Minecraft, …" in any Claude Code session and it uses the same 43 MCP tools.
 
 ## Built in one world, in one day
 
@@ -99,7 +112,7 @@ You need:
 
 Then:
 
-1. Download **Usta-v0.1.0-Windows.zip** from
+1. Download **Usta-v0.2.0-Windows.zip** from
    [Releases](https://github.com/latentcore/usta-minecraft-claude/releases/latest) and extract it.
 2. Close the Minecraft launcher and double-click **KUR.bat**.
 3. Open the launcher, pick the **Usta (Claude)** profile and press Play.
@@ -133,6 +146,10 @@ in `mod`.
 | `/usta geri` · `/usta yinele` | undo · redo |
 | `/usta iptal` · `duraklat` · `sürdür` · `hız <sn>` | cancel, pause, resume, or set the build duration of the running job |
 | `/usta foto` · `/usta harita` · `/usta panel` · `/usta durum` | a picture, a map, the web panel, status |
+| `/usta kod` · `kopyala` · `yapıştır` | the building you look at as code; copy it; paste it in front of you |
+| `/usta çevre` · `aynala [x\|z]` · `döndür [90\|180\|270]` | survey the buildings around you; mirror or rotate the last one |
+| `/usta ada` · `/usta ada zorla` | the 2.1 million block heart island |
+| `/usta yardım` | the full list (the Turkish README has the generated table) |
 | `/ai undo` · `redo` · `cancel` · `status` … | English aliases |
 | `/usta stadyum` · `/usta stadyum zorla` | the 14.4 million block arena |
 | `/usta patlama hızlı` · `normal` · `eşik 500` | fast explosions on or off, and the TNT threshold |

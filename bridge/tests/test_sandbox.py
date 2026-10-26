@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from usta import sandbox
+from usta import blockdb, sandbox
 
 GOOD = """
 b = Build("deneme")
@@ -20,7 +20,7 @@ def _gamedir(tmp_path, monkeypatch):
     cache = tmp_path / "oyun" / "usta" / "cache"
     cache.mkdir(parents=True)
     src = Path(__file__).parent / "data" / "blockdb-26.3.json.gz"
-    (cache / "blockdb-26.3.json.gz").write_bytes(src.read_bytes())
+    (cache / blockdb.db_path().name).write_bytes(src.read_bytes())
 
 
 def test_good_script_produces_plan():

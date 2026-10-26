@@ -418,6 +418,7 @@ public final class ApiServer {
 				return;
 			}
 			j.requestId = q.get("request");
+			j.group = q.get("group");
 			if ("1".equals(q.get("confirmed"))) j.confirmed = true;
 			Job fj = j;
 			JsonObject s = onServer(() -> {
@@ -647,8 +648,21 @@ public final class ApiServer {
 			o.addProperty("message", "Bu iş geri alınmamış: " + e.label);
 			return o;
 		}
+		if (u.jobs.pendingFor(e.id)) {
+			o.addProperty("ok", false);
+			o.addProperty("pending", true);
+			o.addProperty("message", (redo ? "Bu işin yinelenmesi" : "Bu işin geri alınması") + " zaten sürüyor: " + e.label);
+			return o;
+		}
 		if ("ACTION".equals(e.kind)) {
 			return dev.usta.game.WorldActions.undoRedo(u, e, redo);
+		}
+		if (e.group != null) {
+			List<History.Entry> g = new java.util.ArrayList<>();
+			for (History.Entry x : u.history.inGroup(e.group)) {
+				if (x.undone == redo && "BUILD".equals(x.kind) && !u.jobs.pendingFor(x.id)) g.add(x);
+			}
+			if (g.size() > 1) return groupUndoRedo(g, redo, force, source);
 		}
 		if (!redo && !force) {
 			List<History.Entry> later = u.history.laterOverlapping(e);
@@ -682,6 +696,58 @@ public final class ApiServer {
 			o.addProperty("message", "Geri alma verisi okunamadı: " + ex2.getMessage());
 			return o;
 		}
+	}
+
+	/** Cok parcali yapinin (ayni grup) butun parcalari: geri alma en yeniden eskiye, yineleme eskiden yeniye sirayla kuyruga. */
+	private JsonObject groupUndoRedo(List<History.Entry> g, boolean redo, boolean force, String source) {
+		JsonObject o = new JsonObject();
+		if (!redo && !force) {
+			java.util.Set<String> ids = new java.util.HashSet<>();
+			for (History.Entry x : g) ids.add(x.id);
+			java.util.LinkedHashSet<String> later = new java.util.LinkedHashSet<>();
+			for (History.Entry x : g) for (History.Entry y : u.history.laterOverlapping(x)) if (!ids.contains(y.id)) later.add(y.id);
+			if (!later.isEmpty()) {
+				o.addProperty("ok", false);
+				o.addProperty("message", "Bu alanda daha sonra yapılmış " + later.size() + " iş var; önce onları geri al (ya da force).");
+				JsonArray arr = new JsonArray();
+				later.forEach(arr::add);
+				o.add("later", arr);
+				return o;
+			}
+		}
+		for (History.Entry x : g) {
+			Job sj = u.jobs.get(x.id);
+			if (sj != null && sj.saveFuture != null && !sj.saveFuture.isDone()) {
+				try {
+					sj.saveFuture.get(15, TimeUnit.SECONDS);
+				} catch (Exception ignored) {
+				}
+			}
+		}
+		List<History.Entry> order = new java.util.ArrayList<>(g);
+		if (!redo) java.util.Collections.reverse(order);
+		Job first = null;
+		JsonArray jobs = new JsonArray();
+		try {
+			for (History.Entry x : order) {
+				Job j = redo ? u.jobs.makeRedo(x) : u.jobs.makeUndo(x);
+				j.source = source;
+				u.jobs.enqueue(j);
+				if (first == null) first = j;
+				jobs.add(j.id);
+			}
+		} catch (Exception ex2) {
+			o.addProperty("ok", false);
+			o.addProperty("message", "Geri alma verisi okunamadı: " + ex2.getMessage());
+			return o;
+		}
+		o = u.jobs.summary(first);
+		o.addProperty("ok", true);
+		o.addProperty("target", order.get(0).id);
+		o.addProperty("group", g.get(0).group);
+		o.addProperty("parts", order.size());
+		o.add("jobs", jobs);
+		return o;
 	}
 
 	private JsonObject status() {

@@ -19,6 +19,10 @@ public final class UstaClient implements ClientModInitializer {
 		net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STARTED.register(mc -> {
 			Path f = dev.usta.core.Paths.cache().resolve("colors-" + dev.usta.compat.V.MC + ".json.gz");
 			if (!Files.exists(f)) ColorTable.ensure(f);
+			// gizli pencereli gelistirme/test istemcisi sessiz calisir (kullanici o sirada bilgisayari kullaniyor olabilir)
+			if (Boolean.getBoolean("usta.dev.hiddenWindow")) {
+				mc.options.getSoundSourceOptionInstance(net.minecraft.sounds.SoundSource.MASTER).set(0.0);
+			}
 		});
 		UstaMod.LOG.info("Usta istemci tarafi yuklendi");
 	}

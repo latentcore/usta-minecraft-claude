@@ -27,6 +27,7 @@ public final class History {
 		public int changed;
 		public String source;
 		public String request;
+		public String group;     // cok parcali yapi (Kalp Adasi, stadyum): grup tek seferde geri alinir/yinelenir
 		public String action;    // ACTION icin: time | weather | teleport
 		public String actionData; // ACTION icin geri alma verisi (JSON)
 	}
@@ -83,6 +84,15 @@ public final class History {
 			if (e.undone && (best == null || e.finished >= best.finished)) best = e;
 		}
 		return best;
+	}
+
+	/** Bu gruptaki kayitlar (eskiden yeniye). */
+	public synchronized List<Entry> inGroup(String group) {
+		List<Entry> out = new ArrayList<>();
+		for (Entry x : entries) {
+			if (group != null && group.equals(x.group)) out.add(x);
+		}
+		return out;
 	}
 
 	/** e'den sonra yapilmis ve e ile kesisen, geri alinmamis isler. */

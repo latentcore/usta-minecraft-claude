@@ -1,4 +1,4 @@
-"""Usta denetçisi: bir Build'i 36 kontrolden geçirir, 0-100 puanlar ve her bulgu için Türkçe düzeltme önerir.
+"""Usta denetçisi: bir Build'i 38 kontrolden geçirir, 0-100 puanlar ve her bulgu için Türkçe düzeltme önerir.
 
 Kullanım:
     from usta.audit import audit
@@ -33,6 +33,8 @@ Kontroller (id — ne arar):
   unsupported_attachables — meşale, fener, ladder, tabela, flama, buton, halı, çiçek vb. gereken yüzde destek yok
   hanging_without_support — asılı fener/tabela/sarkan bitki tavana bağlı değil; zincir ucu boşlukta
   broken_doors — kapının alt/üst yarısı eksik ya da uyumsuz; altında sağlam zemin yok
+  door_blocked — kapının önü ya da arkası dolu: kapı duvara açılıyor, geçilemez
+  window_blocked — cam dört yandan duvarla kapalı: pencere hiçbir yöne bakmıyor
   broken_beds — yatağın baş/ayak parçası eksik ya da yönü uyumsuz
   broken_double_plants — uzun bitkinin (uzun ot, ayçiçeği, leylak...) yarısı eksik
   stair_orientation — basamak yükseliş yönüne ters (testere dişi çatı) ya da yürünen dizide ters basamak

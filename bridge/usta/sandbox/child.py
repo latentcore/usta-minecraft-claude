@@ -204,8 +204,9 @@ def main(workdir: str) -> None:
             raise RuntimeError("Betik bir Build üretmedi: sonunda result(b) çağır (ya da 'b' adlı bir Build bırak).")
         if mods.get("parts") is not None:      # merdiven ustune sonradan doseme/tavan konduysa bas boslugunu geri ac
             healed = mods["parts"].heal_stairs(b)
+            healed += mods["parts"].heal_doors(b)
             if healed:
-                b.meta.setdefault("notes", []).append(f"merdiven baş boşluğu yeniden açıldı: {healed} hücre")
+                b.meta.setdefault("notes", []).append(f"merdiven baş boşluğu / kapı geçidi açıldı: {healed} hücre")
         site = ctx.get("site") or {}
         origin = captured.get("origin") or site.get("origin") or [0, 0, 0]
         facing = captured.get("facing") or site.get("facing") or "north"

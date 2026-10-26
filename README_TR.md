@@ -33,7 +33,7 @@ yükselişini izleyebilirsin. Her iş tek komutla geri alınır.
 | parça | yer | ne yapar |
 |---|---|---|
 | Fabric modu | `mod/` (Java 25) | 127.0.0.1 üstünde yerel API, tik bütçeli inşa motoru, kalıcı geri al/yinele, koruma bölgeleri, `/claude` ve `/usta` komutları |
-| Python köprüsü | `bridge/usta/` | Claude'u Claude Code CLI ile çalıştırır; yapı kiti, önizleyici, denetçi ve 38 araçlı MCP sunucusu |
+| Python köprüsü | `bridge/usta/` | Claude'u Claude Code CLI ile çalıştırır; yapı kiti, önizleyici, denetçi, yapı→kod çevirici ve 43 araçlı MCP sunucusu |
 
 ## Neler yapar
 
@@ -44,16 +44,28 @@ yükselişini izleyebilirsin. Her iş tek komutla geri alınır.
 - **Modeli ve düşünme düzeyini sen seç.** Yeni yapı kendiliğinden Opus'a, küçük düzenleme Sonnet'e gider. İsteğin başına
   `!opus`, `!sonnet`, `!haiku` ya da `!fable`; düşünme için `!düşük`, `!orta`, `!yüksek`, `!çokyüksek`, `!max` yaz:
   `/claude !opus !max önüme devasa bir saray yap`.
-- **Kurmadan önce denetler.** 36 otomatik kontrol: destek, kapı ve merdiven yürünebilirliği (3 blok baş boşluğu),
+- **Kurmadan önce denetler.** 38 otomatik kontrol: destek, kapı önü ve merdiven yürünebilirliği (3 blok baş boşluğu),
   ışık, çatı, pencere, palet, arazi ve su. Claude bulabildiğini kurmadan önce düzeltir, kapatamadığı uyarıyı sana
   söyler.
 - **Var olanı düzenler.** "Bir kat ekle", "eşyalar nerede?", "kapı tak", "baştan düzgün yap": Usta kastettiğin yapıyı
   bulur ve değiştirir.
+- **Var olanı koda çevirir.** `/usta kod` baktığın yapıyı (senin ya da oyunun yaptığı ev, köy, tapınak) kayıpsız ve
+  okunur Python'a çevirir: kutular, döngüler, simetri; kod DUVARLAR, PENCERELER, KAPILAR, ÇATI, İÇ EŞYA bölümlerine
+  ayrılır ve çalıştırılıp blok blok doğrulanır (oyunun 1.511 doğal yapısında 1.511 birebir). `/usta kopyala` ve
+  `/usta yapıştır` bir yapıyı önüne aynen kopyalar; `/usta aynala` ve `/usta döndür` son yapıyı yerinde çevirir.
+- **Büyük resmi görür.** `/usta çevre` çevrendeki yapıları listeler ve haritasını çıkarır; Claude yeni yapıyı buna göre
+  yerleştirir, gerektiğinde resim mi kod mu bakacağını kendisi seçer.
+- **Oyunu da yönetir, istersen.** Eşya, efekt, büyü, yaratık çağırma gibi istekler izinli bir komut kapısından geçer;
+  canlıları sayar ve temizler (oyuncu, evcil, adlı canlılar ve köylüler korunur). Bunlar geri alınamaz; Claude yalnız
+  açıkça istediğinde kullanır.
 - **Her şeyi geri alır.** `/usta geri` son işi, patlamalar dahil, geri alır. Büyük silmeler tek tık onay bekler.
 - **Tek komut, 14,4 milyon blok.** `/usta stadyum` hazır bir dev stadyumu (705 × 589, yaklaşık 105.000 koltuk)
   Claude'u çağırmadan önüne kurar. Tepeleri alır, çukurları ve suyu doldurur; önde bir yapı varsa yana kayar.
   `/usta stadyum zorla` tam olduğun yere kurar.
-- **Claude Code'dan da çalışır.** Herhangi bir Claude Code oturumunda "Minecraft'ta …" de, aynı 38 MCP aracını kullanır.
+- **Tek komut, Kalp Adası.** `/usta ada` 2,1 milyon bloklu bir tatil adasını bulunduğun yere, baktığın yöne kurar:
+  denizde dolgu, karada lagün; su altı yapılarına dokunmaz, önde bir yapı varsa kayar. 14 parçanın hepsi tek
+  `/usta geri` ile birlikte geri alınır.
+- **Claude Code'dan da çalışır.** Herhangi bir Claude Code oturumunda "Minecraft'ta …" de, aynı 43 MCP aracını kullanır.
 
 ## Tek dünyada, bir günde yapılanlar
 
@@ -97,7 +109,7 @@ Gerekenler:
 Sonra:
 
 1. [Releases](https://github.com/latentcore/usta-minecraft-claude/releases/latest) sayfasından
-   **Usta-v0.1.0-Windows.zip** dosyasını indir ve bir klasöre çıkar.
+   **Usta-v0.2.0-Windows.zip** dosyasını indir ve bir klasöre çıkar.
 2. Minecraft launcher'ı kapat, **KUR.bat**'a çift tıkla.
 3. Launcher'ı aç, **Usta (Claude)** profilini seç, Oyna'ya bas.
 4. Bir dünyada Usta'yı ilk kez kullanırken sohbetteki **Onayla ve yedekle** düğmesine bas (Usta dünyanın yedeğini
@@ -123,16 +135,42 @@ SHA-256'sını doğrular. Kendin derlemek istersen JDK 25 kur, `JAVA_HOME`'u ona
 
 ## Komutlar
 
-| komut | |
+Model ve düşünme düzeyi isteğin başında seçilir: `/claude !haiku !düşük <istek>`. Oyundaki `/usta yardım` ile aynı liste:
+
+<!-- komutlar:başla — scripts/dev/rehber_uret.py üretir, elle düzenleme -->
+| komut | ne yapar |
 |---|---|
-| `/claude <istek>` | kur, düzenle ya da sor |
-| `/claude !haiku !düşük <istek>` | model ve düşünme düzeyi seç |
-| `/usta geri` · `/usta yinele` | geri al · yinele |
-| `/usta iptal` · `duraklat` · `sürdür` · `hız <sn>` | çalışan işi iptal et, duraklat, sürdür ya da süresini ayarla |
-| `/usta foto` · `/usta harita` · `/usta panel` · `/usta durum` | fotoğraf, harita, web paneli, durum |
-| `/usta stadyum` · `/usta stadyum zorla` | 14,4 milyon bloklu stadyum |
-| `/usta patlama hızlı` · `normal` · `eşik 500` | hızlı patlamayı aç/kapat, TNT eşiği |
-| `/ai undo` · `redo` · `cancel` · `status` … | İngilizce karşılıklar |
+| `/claude <istek>` · `/usta <istek>` | Claude'a Türkçe istek (inşa, düzenleme, saat, hava…). |
+| `/usta yardım` | Komut listesini gösterir. |
+| `/usta geri [iş]` | Son işi (ya da verilen işi) geri alır; patlamalar dahil. |
+| `/usta yinele [iş]` | Geri alınan işi yeniden uygular. |
+| `/usta iptal [iş]` | Süren işi iptal eder. |
+| `/usta duraklat` | Süren inşayı duraklatır. |
+| `/usta sürdür` | Duraklatılan inşayı sürdürür. |
+| `/usta hız <sn>` | Süren inşayı yaklaşık bu kadar saniyede bitirir. |
+| `/usta anında` | Süren inşayı hemen bitirir. |
+| `/usta kip <izle\|anında\|sinematik>` | Varsayılan kurulum kipini seçer. |
+| `/usta durum` | Usta'nın durumunu gösterir (oyun, süren iş, Claude girişi). |
+| `/usta yeni` | Yeni konuşma başlatır: Claude önceki istekleri unutur. |
+| `/usta seç 1\|2` | Baktığın bloğu seçim köşesi yapar. |
+| `/usta koru <ad>` | Seçili bölgeyi korumaya alır: Usta oraya yazmaz. |
+| `/usta korumayı-kaldır <ad>` | Bölgenin korumasını kaldırır. |
+| `/usta foto [iş]` | Son yapının fotoğrafını ve izometrik görüntüsünü çeker. |
+| `/usta harita` | Çevrenin kuşbakışı haritasını çıkarır. |
+| `/usta kaydet <iş>` | Yapıyı kütüphaneye kaydeder. |
+| `/usta kütüphane` | Kütüphanedeki yapıları listeler. |
+| `/usta panel` | Tarayıcı panelini açar (yalnız bu bilgisayar). |
+| `/usta kod` | Baktığın yapıyı birebir Python koduna çevirir (usta/calisma/kod). |
+| `/usta kopyala` | Baktığın yapıyı panoya kopyalar (birebir doğrulanır). |
+| `/usta yapıştır` | Panodaki yapıyı önüne, baktığın yöne kurar. |
+| `/usta çevre` | 64 blok içindeki yapıları listeler ve haritasını çıkarır. |
+| `/usta aynala [x\|z]` | Son kurulan yapıyı yerinde aynalar. |
+| `/usta döndür [90\|180\|270]` | Son kurulan yapıyı yerinde döndürür. |
+| `/usta patlama [hızlı\|normal\|eşik <n>]` | Büyük TNT kümelerinin hızlı (kasmasız) patlamasını açar ya da kapatır. |
+| `/usta ada [zorla\|deneme]` | Kalp Adası tatil köyünü bulunduğun yere, baktığın yöne kurar. |
+| `/usta stadyum [zorla]` | Hazır dev stadyumu önüne kurar. |
+| `/ai …` | İngilizce takma ad: aynı alt komutlar İngilizce yazımlarıyla (undo, redo, photo, code…). |
+<!-- komutlar:bitir -->
 
 ## Güvenlik
 

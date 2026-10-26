@@ -177,8 +177,11 @@ _DB: BlockDB | None = None
 _LOCK = threading.Lock()
 
 
+DB_REV = 2  # motorun blok verisi degisince artar (2: mercan duvar yelpazesi, ham cevher blogu dogal); eski onbellek yeniden alinir
+
+
 def db_path() -> Path:
-    return config.cache_dir() / f"blockdb-{config.MC}.json.gz"
+    return config.cache_dir() / f"blockdb-{config.MC}-r{DB_REV}.json.gz"
 
 
 def get() -> BlockDB:

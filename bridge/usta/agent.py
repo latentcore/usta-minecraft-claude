@@ -218,6 +218,18 @@ def run(req: dict) -> int:
     except Exception:
         api = None
     r = Runner(req, api)
+    from . import kalp_adasi
+    if api and kalp_adasi.istek_mi(req["text"]):        # hizli yol: /usta ada -> Kalp Adasi, Claude'suz
+        force = kalp_adasi.zorla_mi(req["text"])
+        api.agent_status(r.rid, "Kalp Adası kuruluyor (≈2,1 milyon blok)" + (", zorla" if force else "") + "…")
+        try:
+            ok, msg = kalp_adasi.kur_onume(game_dir, req.get("anchor"), force=force,
+                                          say=lambda t: api.agent_status(r.rid, t),
+                                          dry="deneme" in req["text"].casefold())
+        except Exception as e:
+            ok, msg = False, f"Kalp Adası kurulamadı: {e}"
+        api.agent_done(r.rid, ok, msg, r.session)
+        return 0 if ok else 1
     from . import stadyum
     if api and stadyum.istek_mi(req["text"]):          # hizli yol: /usta stadyum -> hazir dev stadyum, Claude'suz
         force = stadyum.zorla_mi(req["text"])

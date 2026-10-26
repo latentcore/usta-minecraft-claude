@@ -244,9 +244,19 @@ def split_rooms(x0: int, z0: int, x1: int, z1: int, y: int, h: int, kinds: list[
     return rooms
 
 
-def partition_walls(b: Build, rooms: list, st: S.Style, y: int, h: int, outer: tuple) -> list[tuple[int, int, int]]:
-    """Odalar arasina ic duvar ve kapi bosluklari koyar. outer = (x0,z0,x1,z1) ic sinir. Donus: kapi hucreleri."""
+def partition_walls(b: Build, rooms: list, st: S.Style, y: int, h: int, outer: tuple,
+                    avoid: set | None = None) -> list[tuple[int, int, int]]:
+    """Odalar arasina ic duvar ve kapi bosluklari koyar. outer = (x0,z0,x1,z1) ic sinir. avoid: kapinin iki yaninda
+    olmamasi gereken (x, z) hucreleri (merdiven ve boslugu: korkuluk kapiyi kapatmasin). Donus: kapi hucreleri."""
     doors = []
+    avoid = avoid or set()
+
+    def pick(lo, hi, ok):
+        mid = (lo + hi) // 2
+        for v in sorted(range(lo, hi + 1), key=lambda v: (abs(v - mid), v)):
+            if ok(v):
+                return v
+        return mid
     ox0, oz0, ox1, oz1 = outer
     seen = set()
     for _, a in rooms:
@@ -262,7 +272,7 @@ def partition_walls(b: Build, rooms: list, st: S.Style, y: int, h: int, outer: t
                     continue
                 seen.add(key)
                 st.fill(b, wx, y, lo, wx, y + h - 1, hi, "wall2")
-                dz = (lo + hi) // 2
+                dz = pick(lo, hi, lambda v: not ({(wx - 1, v), (wx, v), (wx + 1, v)} & avoid))
                 b.fill(wx, y, dz, wx, y + 1, dz, "air")
                 doors.append((wx, y, dz))
             if a[5] + 2 == c[2] and not (a[3] < c[0] or c[3] < a[0]):
@@ -273,7 +283,7 @@ def partition_walls(b: Build, rooms: list, st: S.Style, y: int, h: int, outer: t
                     continue
                 seen.add(key)
                 st.fill(b, lo, y, wz, hi, y + h - 1, wz, "wall2")
-                dx = (lo + hi) // 2
+                dx = pick(lo, hi, lambda v: not ({(v, wz - 1), (v, wz), (v, wz + 1)} & avoid))
                 b.fill(dx, y, wz, dx, y + 1, wz, "air")
                 doors.append((dx, y, wz))
     return doors

@@ -10,6 +10,9 @@ def house_dims(params: dict) -> tuple[int, int]:
     s = scale_of(params, 1.0)
     w = int(params.get("width") or max(9, round(15 * s)))
     d = int(params.get("depth") or max(7, round(11 * s)))
+    floors = int(params.get("floors") or (1 if s < 0.8 else 2 if s < 1.8 else 3))
+    if floors >= 2:   # duz ic merdiven (giris + kat yuksekligi kadar basamak + cikis) evin icine sigsin; yoksa cikis on duvari deler
+        d = max(d, get_style(params, None, "rustic").floor_h + 4)
     return w, d
 
 
@@ -47,7 +50,7 @@ def house(params: dict, ctx: dict | None = None) -> Build:
     st.fill(b, tr[0], top, tr[2], tr[3], top, tr[5], "ceiling")
     rk = params.get("roof") or st.roof_kind
     ox0, oz0, ox1, oz1 = shell["outer"]
-    roof = P.roof(b, ox0 - 1, oz0 - 1, ox1 + 1, oz1 + 1, top, st, kind=rk)
+    roof = P.roof(b, ox0 - 1, oz0 - 1, ox1 + 1, oz1 + 1, top, st, kind=rk, min_eave_y=3)   # sacak altinda 2 blok yol
     if st.has("chimney") or st.name.split("@")[0] in ("rustic", "medieval", "scandinavian"):
         P.chimney(b, w - 3, top - 1, d - 4, roof.get("top", top + 4) - top + 3, st)
     # ic mekan
@@ -55,19 +58,28 @@ def house(params: dict, ctx: dict | None = None) -> Build:
     rooms_all = []
     plan = [["foyer", "living_room", "kitchen", "dining_room"], ["master_bedroom", "bathroom", "kids_room", "study"],
             ["library", "guest_room", "attic"]]
+    # merdivenler (katlar arasi, arka sag kose): kat kat ust uste binmesin, tek katlarda 2 sutun batida
+    stairs_at = [(w - 3 - 2 * (fi % 2), d - 3) for fi in range(len(shell["floors"]) - 1)]
+
+    def near_stairs(f: int) -> set:
+        """f. kattaki merdiven ve boslugu (+1 komsu): bolme kapisi buraya acilmasin (korkuluk kapiyi kapatmasin)."""
+        out = set()
+        for fi in (f - 1, f):
+            if 0 <= fi < len(stairs_at):
+                sx_, sz_ = stairs_at[fi]
+                out |= {(sx_ + dx, z) for dx in (-1, 0, 1) for z in range(sz_ - fh - 1, sz_ + 2)}
+        return out
     for fi, rb in enumerate(shell["rooms"]):
         x0, y0, z0, x1, y1, z1 = rb
         kinds = plan[min(fi, 2)]
         n = 4 if (x1 - x0) * (z1 - z0) > 120 else 2 if (x1 - x0) * (z1 - z0) > 40 else 1
         rooms = split_rooms(x0, z0, x1, z1, y0, y1 - y0 + 1, kinds[:n], avoid_x=range(door_x - 1, door_x + door_w + 1))
-        doors += partition_walls(b, rooms, st, y0, y1 - y0 + 1, (x0, z0, x1, z1))
+        doors += partition_walls(b, rooms, st, y0, y1 - y0 + 1, (x0, z0, x1, z1), avoid=near_stairs(fi))
         rooms_all += rooms
-    # merdiven (katlar arasi): arka sag kose
     keep = [(door_x, 1, 1), (door_x, 1, 2)]
     for fi in range(len(shell["floors"]) - 1):
         fy = shell["floors"][fi]
-        # kat kat ust uste binmesin: tek katlarda merdiven 2 sutun batida (bosluk korkuluklari yolu kesmez)
-        sx, sz = w - 3 - 2 * (fi % 2), d - 3
+        sx, sz = stairs_at[fi]
         keep += stair_keep(P.staircase(b, sx, fy + 1, sz, "north", rise=fh, st=st, w=1))
         keep += stair_access(b, sx, sz, fy, fh, bool(fi % 2))
     furnish_rooms(b, rooms_all, st, doors, seed, keep)

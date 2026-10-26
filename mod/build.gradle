@@ -57,6 +57,8 @@ loom.runs.configureEach {
 		vmArg '-Dusta.scenario=' + (project.findProperty('usta.scenario') ?: '')
 		vmArg '-Dusta.scenarioMinutes=' + (project.findProperty('usta.scenarioMinutes') ?: '10')
 		vmArg '-Dusta.seed=' + (project.findProperty('usta.seed') ?: '')
+		vmArg '-Dusta.video=' + (project.findProperty('usta.video') ?: '')
+		if (project.findProperty('usta.video') == '1') vmArg '-Dusta.autoActivate=true'
 	}
 }
 

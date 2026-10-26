@@ -1,6 +1,6 @@
 """Uretilmis stadyumu (onbellek G.npy) oyuncunun ONUNE kurar: ana cephe oyuncuya bakar, arazi duzlenir (tepeler alinir,
 cukurlar/su toprakla doldurulur), on yer dolu ise (koy, yapi) bir sonraki bos yere kayar; zorla=True ise oldugu yere kurar.
-Her parca ayri, geri alinabilir is; bir parca reddedilirse o denemenin parcalari geri alinir.
+Her parca ayri is, hepsi tek grup (tek /usta geri hepsini birlikte geri alir); bir parca reddedilirse o denemenin parcalari geri alinir.
 python arena_onume.py [etiket] [x z yon] [zorla] [deneme]"""
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import numpy as np  # noqa: E402
 
 import arena_core  # noqa: E402
 from usta import blockdb  # noqa: E402
-from usta.gameapi import GameAPI  # noqa: E402
+from usta.gameapi import GameAPI, GameError  # noqa: E402
 from usta.plan import Plan  # noqa: E402
 from usta.worlddata import UNKNOWN, parse_columns  # noqa: E402
 
@@ -137,6 +137,7 @@ def main(tag="", anchor=None, force=False, say=print, dry=False, mode="instant",
                 y += 31
         cuts += [("dilim", a, b) for a, b in CUTS]
         placed = []
+        grp = f"stadyum-{int(time.time() * 1000)}"       # parcalar tek grup: tek /usta geri hepsini birlikte geri alir
         ok = True
         n = len(cuts)
         for i, (kind, ya, yb) in enumerate(cuts, 1):
@@ -177,22 +178,26 @@ def main(tag="", anchor=None, force=False, say=print, dry=False, mode="instant",
                         meta={"name": label, "part": i})
             t0 = time.time()
             extra = {"seconds": str(seconds)} if seconds else {}
-            r = api.submit_plan(plan.to_bytes(), mode=mode, label=f"{label} ({i}/{n})", source="mcp", confirmed="1", **extra,
-                                allow_modify="1" if force else "0", allow_dangerous="0")
-            jid = r["id"]
-            while True:
-                r = api.job(jid, wait_ms=15000)
-                if r.get("state") in ("DONE", "FAILED", "CANCELLED"):
-                    break
+            try:
+                r = api.submit_plan(plan.to_bytes(), mode=mode, label=f"{label} ({i}/{n})", source="mcp", confirmed="1", **extra,
+                                    allow_modify="1" if force else "0", allow_dangerous="0", group=grp)
+                jid = r["id"]
+                while True:
+                    r = api.job(jid, wait_ms=15000)
+                    if r.get("state") in ("DONE", "FAILED", "CANCELLED"):
+                        break
+            except GameError as e:                       # ornek: var olan bir yapiya dokunuyor -> bu yer olmaz, sonrakini dene
+                r = {"state": "REFUSED", "message": str(e.payload.get("message") or e)}
             print(f"[{i}/{n}] {kind} {r.get('state')} {plan.count_solid():,} blok {time.time() - t0:.0f} sn {r.get('message', '')}", flush=True)
             if r.get("state") != "DONE":
                 last_err = r.get("message", "") or r.get("state")
-                for pj in reversed(placed):
+                for pj in reversed(placed):              # grup: sunucu hepsini tek istekte sirayla geri alir; hepsi beklenir
                     u = api.undo(pj)
-                    while u.get("id"):
-                        u2 = api.job(u["id"], wait_ms=15000)
-                        if u2.get("state") in ("DONE", "FAILED", "CANCELLED"):
-                            break
+                    for uid in (u.get("jobs") or ([u["id"]] if u.get("id") else [])):
+                        while api.job(uid, wait_ms=15000).get("state") not in ("DONE", "FAILED", "CANCELLED"):
+                            pass
+                    if u.get("group"):
+                        break
                 ok = False
                 break
             placed.append(jid)
@@ -200,10 +205,10 @@ def main(tag="", anchor=None, force=False, say=print, dry=False, mode="instant",
         if ok:
             print("BITTI", flush=True)
             return True, (f"Usta Arena önüne kuruldu (merkez {ox},{oz}): 14,4 milyon blok, {len(placed)} parça; "
-                          f"her parça /usta geri ile geri alınır.")
+                          f"tek /usta geri hepsini birlikte geri alır.")
         if force:
             break
-        say("Önde bir yapı var, yanına/ilerisine kaydırıyorum…")
+        say(f"Bu yer olmadı ({str(last_err)[:90]}); yanına/ilerisine kaydırıyorum…")
     return False, f"Stadyum kurulamadı: {last_err}. Önündeki yapının üstüne kurmak için: /usta stadyum zorla"
 
 

@@ -199,6 +199,91 @@ def detect_structure(x: int | None = None, y: int | None = None, z: int | None =
     return _j(edit.detect(api, x, y, z))
 
 
+@tool("survey_area", "BÜYÜK RESİM: oyuncunun (ya da center=[x,z]) çevresindeki yapıları bulur: her birinin kutusu, boyutu, tarzı, en "
+      "çok kullanılan blokları, uzaklığı; with_code=true ise her yapının kayıpsız kod özeti (bölümler, kat, kapı, çatı) ve kod dosyası. "
+      "Kuşbakışı harita görüntüsü de döner. Bir yerde ne var, neyin yanına ne yapılır, köy/şehir düzeni için önce bu.")
+def survey_area(radius: int = 64, with_code: bool = False, center: list[int] | None = None) -> list:
+    from . import cevre
+    api = ops.game()
+    s = cevre.survey(api, radius, with_code=with_code, center=tuple(center) if center else None)
+    fps = [{"x0": it["box"][0], "z0": it["box"][2], "x1": it["box"][3], "z1": it["box"][5], "facing": "north"} for it in s["structures"]]
+    try:
+        info, data, _ = ops.map_view(tuple(s["center"][::2]) if center else None, min(96, int(radius)), REQUEST_ID, footprints=fps,
+                                     title="çevredeki yapılar")
+    except Exception:  # noqa: BLE001
+        data = None
+    return _with_image(s, data)
+
+
+@tool("run_game_command", "YALNIZ oyuncu istediğinde oyun komutu çalıştırır (çıktısı döner): give, effect, summon, gamerule, difficulty, "
+      "xp, enchant, playsound, particle, title, clear, item, attribute, spawnpoint, locate, tellraw, ride, tag, gamemode, worldborder, "
+      "loot, recipe, advancement… Saat, hava ve ışınlanma için set_time / set_weather / teleport_player kullan (onlar geri alınabilir). "
+      "Blok yazan (fill/setblock/clone), yönetici (op/stop/ban) ve kill/damage komutları YOK: yapı her zaman geri alınabilir planla "
+      "kurulur, canlı silmek için remove_entities. Komutlar geri alınamaz; bunu oyuncuya söyle.")
+def run_game_command(command: str) -> str:
+    return _j(ops.game().world_action("command", {"command": command, "source": "agent" if REQUEST_ID else "mcp"}))
+
+
+@tool("entities", "Çevredeki canlılar ve varlıklar (tür, konum, ad, evcil/korunan mı); radius blok (en çok 96).")
+def entities(radius: int = 32) -> str:
+    api = ops.game()
+    p = api.context(8)["player"]
+    r = max(1, min(int(radius), 96))
+    ents = api.entities(int(p["x"]) - r, int(p["y"]) - r, int(p["z"]) - r, int(p["x"]) + r, int(p["y"]) + r, int(p["z"]) + r)
+    by: dict[str, int] = {}
+    for e in ents:
+        t = str(e.get("type", "?"))
+        by[t] = by.get(t, 0) + 1
+    return _j({"ok": True, "count": len(ents), "by_type": dict(sorted(by.items(), key=lambda kv: -kv[1])), "entities": ents[:60]})
+
+
+@tool("remove_entities", "YALNIZ oyuncu istediğinde canlı temizler: types = ['zombie', 'skeleton'] ya da ['hostile'] (tüm düşmanlar); "
+      "radius (en çok 96) oyuncu çevresinde ya da x,y,z merkezli. Oyuncu, evcil, adlı, köylü ve yardımcı canlılar ASLA silinmez.")
+def remove_entities(types: list[str], radius: int = 24, x: float | None = None, y: float | None = None, z: float | None = None) -> str:
+    body: dict = {"types": types, "radius": radius, "source": "agent" if REQUEST_ID else "mcp"}
+    for k, v in (("x", x), ("y", y), ("z", z)):
+        if v is not None:
+            body[k] = v
+    return _j(ops.game().world_action("entities_remove", body))
+
+
+@tool("structure_to_code", "Var olan bir yapıyı (oyuncunun ya da doğanın yaptığı: ev, köy, tapınak, kale…) KAYIPSIZ, okunur Python "
+      "betiğine çevirir: kutu dolguları (boyama sırası), tekrarlar için döngüler, simetri için yarısı + ayna. Kod çalıştırılıp blok "
+      "blok doğrulanır (exact=true ise birebir aynı). Yapıyı ANLAMAK ve DÜZENLEMEK için: kodu oku, istenen yeri değiştir, "
+      "run_build_script ile başlıktaki origin'e facing='north' kur (mevcut yapının üstüne: allow_modify=true). box = [x0,y0,z0,x1,y1,z1]; "
+      "verilmezse bakılan (ya da x,y,z'deki) yapı algılanır. skip_natural: kutudaki doğal blokları (toprak, ağaç, su) dışarıda bırak.")
+def structure_to_code(x: int | None = None, y: int | None = None, z: int | None = None, box: list[int] | None = None,
+                      skip_natural: bool = False, max_lines: int = 400) -> str:
+    from . import cevre, edit
+    api = ops.game()
+    det = None
+    if box is None:
+        if x is None:
+            la = api.context(8).get("looking_at")
+            if not la:
+                return _j({"ok": False, "message": "Oyuncu bir yapıya bakmıyor; x,y,z ya da box ver."})
+            x, y, z = la["pos"]
+        det = edit.detect(api, x, y, z)
+        if not det.get("ok"):
+            return _j(det)
+        box = det["box"]
+    else:
+        box = edit.norm_box(api, box)
+    x0, y0, z0 = box[:3]
+    code, st, path = cevre.structure_code(api, box, label=f"yapı {x0},{y0},{z0}", skip_natural=skip_natural)
+    lines = code.splitlines()
+    nl = chr(10)
+    shown = nl.join(lines[:max_lines])
+    if len(lines) > max_lines:
+        shown += nl + f"# … {len(lines) - max_lines} satır daha (tamamı: {path})"
+    keep = ("exact", "match_pct", "cells", "states", "body_lines", "lines_per_1000", "loops", "loops2", "symmetry", "block_entities",
+            "parca_yuzde", "kati_parca_yuzde", "ozet", "seconds")
+    head = {"ok": True, "box": box, "file": str(path), **{k: st[k] for k in keep if k in st}}
+    if det:
+        head["detected"] = {k: det.get(k) for k in ("size", "style_guess", "roof_guess", "floor_levels") if k in det}
+    return _j(head) + nl + nl + shown
+
+
 @tool("edit_structure", "Mevcut bir yapıyı düzenleme betiği: betikte `existing` (Build; yerel 0,0,0 = yapının kutusunun en küçük köşesi, "
       "1 blok pay dahil; ön -z) hazır. Değiştir ve result(existing) ya da yeni bir Build döndür (origin verilmezse kutunun köşesi). "
       "box = [x0,y0,z0,x1,y1,z1] (iki köşe; history'nin [x,y,z,sx,sy,sz] kutusu da olur); box verilmezse oyuncunun baktığı "
@@ -234,8 +319,8 @@ def generate(name: str, params: dict | None = None, where: str = "front", origin
     return _with_image(info, data)
 
 
-@tool("redstone_list", "Hazır kızıltaş mekanizmaları ve parametreleri: gizli piston kapı (oyunda denendi), demir kapı+düğme, "
-      "basınç plakalı kapı, gece lambası, kollu ışık, kapı zili, gizli kapak (vanilla kurallarıyla yazıldı, oyunda denenmedi). "
+@tool("redstone_list", "Hazır kızıltaş mekanizmaları ve parametreleri: gizli piston kapı, demir kapı+düğme, basınç plakalı kapı, "
+      "gece lambası, kollu ışık, kapı zili, gizli kapak (yedisi de oyunda denendi). "
       "Listede olmayan devreyi run_build_script ile sıfırdan kur ve oyuncuya 'devre denenmedi' de.")
 def redstone_list() -> str:
     from . import kitdoc

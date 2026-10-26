@@ -42,10 +42,10 @@ MODRINTH = [  # (proje, surum numarasi) — KARARLAR K-03/K-04
 ]
 PY_REQS = ["mcp==2.3.0", "numpy==2.5.4", "pillow==13.0.0", "jsonschema==4.26.0"]  # numpy 2.5 -> Python 3.12+
 # Derlenmis mod (GitHub surumu): mod/build/libs'te yerel derleme yoksa buradan, sha256 dogrulanarak indirilir
-RELEASE_JAR = ("https://github.com/latentcore/usta-minecraft-claude/releases/download/v0.1.0/usta-0.1.0.jar",
-               "73efed83d849f17d8c54460133ed03e1046e5c8fdda1b227d032003c758a6391")
+RELEASE_JAR = ("https://github.com/latentcore/usta-minecraft-claude/releases/download/v0.2.0/usta-0.2.0.jar",
+               "616b71aeab1c3e9b7177aea5fdce80b91a1036d064c35d99f0cf308c3113c9f2")
 PROFILE_KEY = "usta-claude"
-UA = {"User-Agent": "usta-kurulum/0.1"}
+UA = {"User-Agent": "usta-kurulum/0.2"}
 DRY = "--dry-run" in sys.argv
 
 
@@ -187,10 +187,10 @@ def find_claude() -> Path | None:
 
 def usta_jar() -> Path:
     """Yerel derleme (mod/build/libs) varsa onu, yoksa GitHub surumundeki hazir jar'i (sha256 dogrulamali) kullanir."""
-    jar = PROJECT / "mod" / "build" / "libs" / "usta-0.1.0.jar"
+    jar = PROJECT / "mod" / "build" / "libs" / "usta-0.2.0.jar"
     if jar.exists():
         return jar
-    cached = DATA / "indirilen" / "usta-0.1.0.jar"
+    cached = DATA / "indirilen" / "usta-0.2.0.jar"
     if not (cached.exists() and sha(cached, "sha256") == RELEASE_JAR[1]):
         say("[..] Usta modu GitHub sürümünden indiriliyor…")
         download(RELEASE_JAR[0], cached, ("sha256", RELEASE_JAR[1]))

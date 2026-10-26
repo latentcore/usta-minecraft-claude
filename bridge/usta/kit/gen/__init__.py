@@ -45,6 +45,8 @@ def build(name: str, params: dict | None = None, ctx: dict | None = None) -> Bui
     from .common import seal_water
     from .. import parts as _parts
     _parts.heal_stairs(b)                      # merdiven ustu bas boslugu (sonradan konan doseme/tavan kalkar)
+    _parts.heal_doors(b)                       # ince engelle kapanmis kapi onu/arkasi (gecit acilir)
+    _parts.heal_attachables(b)                 # destegi sonradan kalkan mesale/tabela/hali (oyun dusururdu)
     n = seal_water(b, ctx)                     # su altinda disariya acik hava -> dunyadaki su kalir (kuru cukur yok)
     if n:
         b.meta.setdefault("notes", []).append(f"su korundu: {n} hücre")

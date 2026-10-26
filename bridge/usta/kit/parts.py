@@ -1521,6 +1521,67 @@ def heal_stairs(b) -> int:
     return n
 
 
+def heal_doors(b) -> int:
+    """Onu ya da arkasi ince bir engelle (tek kat duvar, dolap, cit) kapanmis kapilarin gecisini acar: kapinin o yanindaki
+    iki hucre (alt ve ust) bosaltilir, ama yalniz hemen arkasindaki iki hucre yurunebilirse (gercek bir gecit olusur).
+    Kalin engelde kapiya dokunulmaz (denetci 'door_blocked' der). Donus: acilan hucre sayisi."""
+    db = _db()
+
+    def blocking(s: str) -> bool:
+        if s in (KEEP, AIR):
+            return False
+        n = s.lstrip("!").split("[", 1)[0]
+        if n.endswith(("_stairs", "_slab", "_carpet", "_door", "_trapdoor", "_sign", "_banner", "_pressure_plate", "_button")):
+            return False
+        try:
+            full = db.is_full(s.lstrip("!"))
+        except Exception:
+            full = False
+        return full or n.endswith(("_fence", "_wall", "_pane", "_bars"))
+
+    (ox, oy, oz), ids = b.dense()
+    n = 0
+    for pid, s in enumerate(b.palette):
+        name = s.lstrip("!").split("[", 1)[0]
+        if not name.endswith("_door") or "half=lower" not in s:
+            continue
+        f = s.split("facing=", 1)[1].split(",", 1)[0].rstrip("]") if "facing=" in s else None
+        if f not in VEC:
+            continue
+        d = VEC[f]
+        for (y, z, x) in np.argwhere(ids == pid):
+            X, Y, Z = ox + int(x), oy + int(y), oz + int(z)
+            for sgn in (1, -1):
+                a = (X + sgn * d[0], Z + sgn * d[2])
+                c = (X + 2 * sgn * d[0], Z + 2 * sgn * d[2])
+                if blocking(b.get(a[0], Y, a[1])) and blocking(b.get(a[0], Y + 1, a[1])) \
+                        and not blocking(b.get(c[0], Y, c[1])) and not blocking(b.get(c[0], Y + 1, c[1])):
+                    b.set(a[0], Y, a[1], AIR)
+                    b.set(a[0], Y + 1, a[1], AIR)
+                    n += 2
+    return n
+
+
+def heal_attachables(b) -> int:
+    """Desteksiz kalan tutunan bloklar (duvar mesalesi, tabela, dugme, hali, cicek...): uretec bir duvari ya da zemini
+    sonradan kaldirinca havada kalanlar. Oyun bunlari ilk blok guncellemesinde dusurur; burada once duzeltilir: duvar
+    mesalesinin alti doluysa ayakli mesaleye doner, digerleri kaldirilir. Yalniz uretecler icin (betikte destek dunyada
+    olabilir). Donus: duzeltilen blok sayisi."""
+    from ..audit.checks import Ctx, _support_eval
+    ctx = Ctx(b, None)
+    bi, _ = _support_eval(ctx, "attach")
+    n = 0
+    for i in bi.tolist():
+        x, y, z = ctx.loc(*np.unravel_index(i, ctx.shape))
+        name = str(b.get(x, y, z) or "").split("[", 1)[0]
+        if name.endswith("wall_torch") and b.is_solid(x, y - 1, z):
+            b.set(x, y, z, name.replace("wall_torch", "torch"))
+        else:
+            b.set(x, y, z, AIR)
+        n += 1
+    return n
+
+
 def stair_hatch(b, cx: int, cz: int, y: int, r: int = 1) -> int:
     """Doner merdivenin ust kattaki cikisi: (cx,cz) cevresindeki halkada, altinda 1-3 blok icinde basamak olan
     doseme hucrelerini acar (son basamaklarin bas boslugu). Donus: acilan hucre sayisi."""
@@ -1743,12 +1804,19 @@ def _eave_brackets(b, st: Style, x0, z0, x1, z1, y, o, lowest, X0, Z0, sides=("n
 
 
 def _roof_common(kind, b, x0, z0, x1, z1, y, st, axis, pitch, overhang, role, trim, gable_role, under, facing=None,
-                 brackets=None, profile=None):
+                 brackets=None, profile=None, min_eave_y=None):
     st = _st(st)
     x0, x1 = sorted((x0, x1))
     z0, z1 = sorted((z0, z1))
     o = int(st.overhang if overhang is None else overhang)
     pitch = float(st.pitch if pitch is None or pitch == 0 else pitch) if (pitch or st.pitch) else 1.0
+    if brackets is None:
+        brackets = st.has("eaves_brackets")
+    if min_eave_y is not None and profile is None:
+        # sacak (alt suslemesi dahil) min_eave_y'nin altina sarkmasin: altinda yurunen yol 2 blok bos kalir
+        drop = 1 if (under and pitch >= 1) or brackets else 0
+        while o > 0 and y + min(dy for dy, _ in _profile(pitch, -o)) - drop < min_eave_y:
+            o -= 1
     if axis is None:
         axis = "x" if (x1 - x0) >= (z1 - z0) else "z"
     field = _roof_field(x0, z0, x1, z1, o, kind, axis, facing)
@@ -1781,8 +1849,6 @@ def _roof_common(kind, b, x0, z0, x1, z1, y, st, axis, pitch, overhang, role, tr
         gable_role = "wall2" if st.has("upper_timber") or st.has("timber") else "wall"
     top, lowest = _put_roof(b, st, field, rows, y, role, ("roof_trim" if trim else None), verge,
                             under and pitch >= 1 and profile is None, gplanes, gable_role, ridge_cap=(kind != "shed"))
-    if brackets is None:
-        brackets = st.has("eaves_brackets")
     if brackets:
         sides_ = ("north", "south") if (kind == "gable" and axis == "x") else (("east", "west") if kind == "gable" else ("north", "south", "east", "west"))
         _eave_brackets(b, st, x0, z0, x1, z1, y, o, lowest, X0, Z0, sides_)
@@ -1794,27 +1860,29 @@ def _roof_common(kind, b, x0, z0, x1, z1, y, st, axis, pitch, overhang, role, tr
 @part("roof_gable", "Beşik çatı: saçak taşkını, kalkan duvarları, kontrast kenar (alın tahtası), mahya başlığı, düzgün saçak altı.")
 def roof_gable(b, x0: int, z0: int, x1: int, z1: int, y: int, st: Style | None = None, axis: str | None = None,
                pitch: float | None = None, overhang: int | None = None, role: str = "roof", trim: bool = True,
-               gable_role: str | None = None, under: bool = True, brackets: bool | None = None):
+               gable_role: str | None = None, under: bool = True, brackets: bool | None = None,
+               min_eave_y: int | None = None):
     """(x0,z0)-(x1,z1) duvar dis yuzleri; y = duvar hattindaki ilk cati sirasi (duvarin en ust sirasi + 1).
     axis: mahya yonu ('x' | 'z'; varsayilan uzun kenar). pitch: 0.5 (basamak+yarim), 1 (45), 2 (dik). Sacak duvar
-    ustunden asagi sarkar (gercekci); kalkan ucgeni gable_role ile dolar."""
+    ustunden asagi sarkar (gercekci); kalkan ucgeni gable_role ile dolar. min_eave_y: sacagin (alt susu dahil) inebilecegi
+    en dusuk y; tasma bu sinira gore kisalir (sacak altinda yurunen yol 2 blok bos kalsin)."""
     return _roof_common("gable", b, x0, z0, x1, z1, y, st, axis, pitch, overhang, role, trim, gable_role, under,
-                        brackets=brackets)
+                        brackets=brackets, min_eave_y=min_eave_y)
 
 
 @part("roof_hip", "Kırma çatı (dört yana eğimli; kare tabanda piramit): kalça çizgileri oyunda dış köşe olur, saçak konsolları (Osmanlı).")
 def roof_hip(b, x0: int, z0: int, x1: int, z1: int, y: int, st: Style | None = None, pitch: float | None = None,
              overhang: int | None = None, role: str = "roof", trim: bool = False, under: bool = True,
-             brackets: bool | None = None):
+             brackets: bool | None = None, min_eave_y: int | None = None):
     """Bkz. roof_gable. Kare ayak izinde piramit (roof_pyramid)."""
     return _roof_common("hip", b, x0, z0, x1, z1, y, st, None, pitch, overhang, role, trim, None, under,
-                        brackets=brackets)
+                        brackets=brackets, min_eave_y=min_eave_y)
 
 
 @part("roof_pyramid", "Piramit çatı (kare kule/köşk başlığı), tepesine alem/sivri uç.")
 def roof_pyramid(b, x0: int, z0: int, x1: int, z1: int, y: int, st: Style | None = None, pitch: float | None = None,
-                 overhang: int | None = None, role: str = "roof", finial: bool = True):
-    r = _roof_common("hip", b, x0, z0, x1, z1, y, st, None, pitch, overhang, role, False, None, True)
+                 overhang: int | None = None, role: str = "roof", finial: bool = True, min_eave_y: int | None = None):
+    r = _roof_common("hip", b, x0, z0, x1, z1, y, st, None, pitch, overhang, role, False, None, True, min_eave_y=min_eave_y)
     if finial:
         cx, cz = (x0 + x1) // 2, (z0 + z1) // 2
         b.set(cx, r["top"] + 1, cz, "minecraft:lightning_rod[facing=up]")
@@ -1824,15 +1892,16 @@ def roof_pyramid(b, x0: int, z0: int, x1: int, z1: int, y: int, st: Style | None
 
 @part("roof_shed", "Tek eğimli (sundurma) çatı: yüksek taraf facing yönünde, yan kalkanlar.")
 def roof_shed(b, x0: int, z0: int, x1: int, z1: int, y: int, st: Style | None = None, facing: str = "south",
-              pitch: float | None = None, overhang: int | None = None, role: str = "roof", trim: bool = True):
+              pitch: float | None = None, overhang: int | None = None, role: str = "roof", trim: bool = True,
+              min_eave_y: int | None = None):
     """facing = cikis yonu (yuksek kenar o tarafta). Varsayilan egim 0.5 (yatik)."""
     return _roof_common("shed", b, x0, z0, x1, z1, y, st, None, 0.5 if pitch is None else pitch, overhang, role, trim,
-                        None, True, facing=facing)
+                        None, True, facing=facing, min_eave_y=min_eave_y)
 
 
 @part("roof_mansard", "Mansart çatı: dik alt etek (2 sıra dolu+basamak) ve yatık üst kırma; çatı katına yer açar.")
 def roof_mansard(b, x0: int, z0: int, x1: int, z1: int, y: int, st: Style | None = None, steep_rows: int = 2,
-                 overhang: int | None = None, role: str = "roof", top_pitch: float = 0.5):
+                 overhang: int | None = None, role: str = "roof", top_pitch: float = 0.5, min_eave_y: int | None = None):
     st = _st(st)
     o = int(st.overhang if overhang is None else overhang)
     k = int(steep_rows)
@@ -1843,19 +1912,25 @@ def roof_mansard(b, x0: int, z0: int, x1: int, z1: int, y: int, st: Style | None
             return _profile(2.0, s, ridge and s == k - 1)
         base = 2 * k
         return [(base + dy, t) for dy, t in _profile(top_pitch, s - k, ridge)]
+    while min_eave_y is not None and o > 0 and y + min(dy for dy, _ in prof(0, False)) < min_eave_y:
+        o -= 1                                   # dik etek yurunen yola sarkmasin
     return _roof_common("hip", b, x0, z0, x1, z1, y, st, None, 2.0, o, role, False, None, True, profile=prof)
 
 
 @part("roof_curved", "Kavisli görünümlü Japon çatısı: saçakta yatık yarım basamak, ortada 45°, mahyada dik; köşeleri kalkık.")
 def roof_curved(b, x0: int, z0: int, x1: int, z1: int, y: int, st: Style | None = None, kind: str = "hip",
-                overhang: int | None = None, role: str = "roof", upturn: bool = True):
+                overhang: int | None = None, role: str = "roof", upturn: bool = True, min_eave_y: int | None = None):
     st = _st(st)
     o = int(st.overhang if overhang is None else overhang)
     x0_, x1_ = sorted((x0, x1))
     z0_, z1_ = sorted((z0, z1))
-    span = min(x1_ - x0_, z1_ - z0_) + 1 + 2 * o
-    nrows = span // 2 + 1
-    rows = _curved_profile(nrows, o)
+    while True:
+        span = min(x1_ - x0_, z1_ - z0_) + 1 + 2 * o
+        nrows = span // 2 + 1
+        rows = _curved_profile(nrows, o)
+        if min_eave_y is None or o <= 0 or y + min(dy for dy, _ in rows[0]) >= min_eave_y:
+            break
+        o -= 1                                   # kalkik sacak yurunen yola sarkmasin
 
     def prof(dd, ridge):
         pr = rows[min(dd, len(rows) - 1)]
@@ -1876,8 +1951,9 @@ def roof_curved(b, x0: int, z0: int, x1: int, z1: int, y: int, st: Style | None 
 
 @part("roof_flat", "Düz çatı: dokulu döşeme, saçak alnı, korkuluk duvarı (parapet) + harpuşta, çatı üstü ayrıntıları (ışıklık, baca, güneş paneli).")
 def roof_flat(b, x0: int, z0: int, x1: int, z1: int, y: int, st: Style | None = None, overhang: int | None = None,
-              parapet: int | None = None, details: bool = True, role: str = "roof"):
-    """y = cati dosemesi seviyesi (duvarin en ust sirasi + 1). parapet: 0 yok, 1+ yukseklik (+ yarim harpusta)."""
+              parapet: int | None = None, details: bool = True, role: str = "roof", min_eave_y: int | None = None):
+    """y = cati dosemesi seviyesi (duvarin en ust sirasi + 1). parapet: 0 yok, 1+ yukseklik (+ yarim harpusta).
+    min_eave_y yalniz arayuz uyumu icin: duz catinin alni en cok y-1'e iner."""
     st = _st(st)
     x0, x1 = sorted((x0, x1))
     z0, z1 = sorted((z0, z1))

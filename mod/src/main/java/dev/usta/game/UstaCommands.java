@@ -79,7 +79,7 @@ public final class UstaCommands {
 		for (String a : List.of("koru", "protect")) {
 			t.then(Commands.literal(a).then(Commands.argument("ad", StringArgumentType.word()).executes(c -> protect(c, StringArgumentType.getString(c, "ad"), true))));
 		}
-		for (String a : List.of("korumayi-kaldir", "unprotect")) {
+		for (String a : List.of("korumayi-kaldir", "korumayı-kaldır", "unprotect")) {
 			t.then(Commands.literal(a).then(Commands.argument("ad", StringArgumentType.word()).executes(c -> protect(c, StringArgumentType.getString(c, "ad"), false))));
 		}
 		for (String a : List.of("foto", "fotograf", "fotoğraf", "photo")) {
@@ -92,6 +92,19 @@ public final class UstaCommands {
 		}
 		for (String a : List.of("panel")) t.then(Commands.literal(a).executes(c -> tool(c, "panel", null)));
 		for (String a : List.of("kutuphane", "kütüphane", "library")) t.then(Commands.literal(a).executes(c -> tool(c, "kutuphane", null)));
+		// yapi -> kod ve yapi islemleri (Claude cagirmadan, kopru yardimcisi)
+		for (String a : List.of("kod", "code")) t.then(Commands.literal(a).executes(c -> tool(c, "kod", null)));
+		for (String a : List.of("kopyala", "copy")) t.then(Commands.literal(a).executes(c -> tool(c, "kopyala", null)));
+		for (String a : List.of("yapistir", "yapıştır", "paste")) t.then(Commands.literal(a).executes(c -> tool(c, "yapistir", null)));
+		for (String a : List.of("cevre", "çevre", "survey")) t.then(Commands.literal(a).executes(c -> tool(c, "cevre", null)));
+		for (String a : List.of("aynala", "mirror")) {
+			t.then(Commands.literal(a).executes(c -> tool(c, "aynala", "x"))
+				.then(Commands.argument("eksen", StringArgumentType.word()).executes(c -> tool(c, "aynala", StringArgumentType.getString(c, "eksen")))));
+		}
+		for (String a : List.of("dondur", "döndür", "rotate")) {
+			t.then(Commands.literal(a).executes(c -> tool(c, "dondur", "90"))
+				.then(Commands.argument("derece", StringArgumentType.word()).executes(c -> tool(c, "dondur", StringArgumentType.getString(c, "derece")))));
+		}
 		for (String a : List.of("patlama", "explosion")) {
 			LiteralArgumentBuilder<CommandSourceStack> pt = Commands.literal(a).executes(c -> explosion(c, null, -1));
 			for (String on : List.of("hizli", "hızlı", "fast", "ac", "aç", "on")) pt.then(Commands.literal(on).executes(c -> explosion(c, true, -1)));
@@ -125,9 +138,11 @@ public final class UstaCommands {
 		s.sendSystemMessage(Chat.line("Claude ile inşa: /claude <ne istediğin>"));
 		s.sendSystemMessage(Component.literal("  Örnek: /claude önüme devasa modern güzel bir ev yap").withStyle(st -> st.withColor(Chat.SOFT)));
 		s.sendSystemMessage(Component.literal("  Örnek: /claude çatıyı daha sivri yap · /claude akşam olsun").withStyle(st -> st.withColor(Chat.SOFT)));
-		s.sendSystemMessage(Component.literal("  /usta geri · yinele · iptal · duraklat · sürdür · hız <sn> · anında · kip <izle|anında|sinematik>").withStyle(st -> st.withColor(Chat.SOFT)));
-		s.sendSystemMessage(Component.literal("  /usta foto · harita · seç 1|2 · koru <ad> · kaydet <iş> · kütüphane · panel · durum · yeni · patlama hızlı|normal").withStyle(st -> st.withColor(Chat.SOFT)));
-		s.sendSystemMessage(Component.literal("  İngilizce: /ai undo · redo · cancel · pause · resume · speed · photo · map · status").withStyle(st -> st.withColor(Chat.SOFT)));
+		// liste bridge/usta/komutlar.py ile ayni tutulur (tests/test_tutarlilik.py denetler)
+		s.sendSystemMessage(Component.literal("  /usta yardım · geri · yinele · iptal · duraklat · sürdür · hız <sn> · anında · kip <izle|anında|sinematik>").withStyle(st -> st.withColor(Chat.SOFT)));
+		s.sendSystemMessage(Component.literal("  /usta foto · harita · seç 1|2 · koru <ad> · korumayı-kaldır <ad> · kaydet <iş> · kütüphane · panel · durum · yeni · patlama hızlı|normal").withStyle(st -> st.withColor(Chat.SOFT)));
+		s.sendSystemMessage(Component.literal("  /usta kod · kopyala · yapıştır · çevre · aynala [x|z] · döndür [90|180|270] · ada · stadyum").withStyle(st -> st.withColor(Chat.SOFT)));
+		s.sendSystemMessage(Component.literal("  İngilizce: /ai undo · redo · cancel · pause · resume · speed · instant · photo · map · code · copy · paste · survey · mirror · rotate · status").withStyle(st -> st.withColor(Chat.SOFT)));
 		return 1;
 	}
 

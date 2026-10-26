@@ -621,6 +621,35 @@ def test_broken_doors():
     assert not has(ok, "broken_doors")
 
 
+def test_door_blocked():
+    b = platform()
+    b.fill(0, 1, 3, 6, 3, 3, "stone_bricks")               # kapinin hemen guneyinde duvar
+    b.set(2, 1, 2, "oak_door[half=lower,facing=south]")
+    b.set(2, 2, 2, "oak_door[half=upper,facing=south]")
+    assert has(b, "door_blocked", sev="major")
+    assert not has(house(), "door_blocked")
+    st = platform()                                           # onunde basamak: yurunebilir sayilir
+    st.set(2, 1, 2, "oak_door[half=lower,facing=south]")
+    st.set(2, 2, 2, "oak_door[half=upper,facing=south]")
+    st.set(2, 1, 3, "oak_stairs[facing=north]")
+    assert not has(st, "door_blocked")
+    b.meta["decor_doors"] = [[2, 1, 2], [2, 2, 2]]           # dolap kapagi (ic mekan tarifi): gecis kapisi degil
+    assert not has(b, "door_blocked")
+
+
+def test_window_blocked():
+    b = platform()
+    b.fill(0, 1, 0, 6, 3, 2, "stone_bricks")
+    b.set(3, 2, 1, "glass")                                   # duvarin icine gomulu cam
+    assert has(b, "window_blocked")
+    assert not has(house(), "window_blocked")
+    sky = platform()
+    sky.fill(0, 1, 0, 6, 3, 2, "stone_bricks")
+    sky.set(3, 3, 1, "glass")
+    sky.set(3, 2, 1, "air")                                   # alti acik: tavan penceresi
+    assert not has(sky, "window_blocked")
+
+
 def test_broken_beds():
     b = platform()
     b.set(2, 1, 2, "red_bed[facing=north,part=foot]")
@@ -905,6 +934,25 @@ def test_stair_third_block_bump_is_critical():
     low.fill(0, 4, 0, 8, 4, 8, "stone_bricks")         # 2 blok bile yok
     assert has(low, "stair_walkability", sev="critical")
     assert not has(flight("east"), "stair_walkability")
+    eave = flight("east")
+    eave.set(1, 4, 3, "stone_brick_stairs[facing=north,half=top]")   # dar merdivende sacak 3. bloga girerse yine kritik
+    assert has(eave, "stair_walkability", sev="critical")
+
+
+def test_roof_row_under_eave_and_capped_stair_mass_are_not_stairs():
+    # acik havadaki genis basamak sirasi cati egimidir: komsu sacak ilk basamagin 3. bloguna girse de kritik degil
+    roof = platform(10)
+    for i in range(3):
+        roof.fill(1 + i, 1 + i, 2, 1 + i, 1 + i, 7, "stone_brick_stairs[facing=east,half=bottom]")
+        if i:
+            roof.fill(1 + i, 1, 2, 1 + i, i, 7, "stone_bricks")
+    roof.fill(4, 1, 2, 4, 3, 7, "stone_bricks")
+    roof.fill(1, 4, 2, 1, 4, 7, "stone_brick_stairs[facing=north,half=top]")
+    assert not has(roof, "stair_walkability", sev="critical")
+    # kademeli kutle: ust basamagin hemen ustu yarim blokla kapali -> yurunen merdiven degil (kat baglantisini oda/kat kontrolu yakalar)
+    mass = flight("east", n=2)
+    mass.set(2, 3, 3, "stone_brick_slab[type=bottom]")
+    assert not has(mass, "stair_walkability", sev="critical")
 
 
 def test_heal_stairs_reopens_stairwell_closed_later():

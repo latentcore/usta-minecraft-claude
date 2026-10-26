@@ -523,7 +523,10 @@ def castle(params: dict, ctx: dict | None = None) -> Build:
     # --- avlu: yol, kuyu, ahir (sol sur dibinde sundurma), demirci (sag), fenerler
     ix0, iz0, ix1, iz1 = x0 + T_, z0 + T_, x1 - T_, z1 - T_
     P.path(b, [(gx, z0 + T_), (gx, kz0 - 3)], 0, st, w=3, border=True)
-    P.well(b, gx + 5, 0, (z0 + kz0) // 2, st)
+    wz = (z0 + kz0) // 2                              # kuyu, kapi kulesi kapisinin onunu (z0+5..z0+6) kapatmasin
+    if wz - 1 <= z0 + 6 and z0 + 8 <= kz0 - 5:
+        wz = z0 + 8
+    P.well(b, gx + 5 if wz - 1 > z0 + 6 else gx + 9, 0, wz, st)
     sx0, sz0 = ix0 + 1, iz0 + 6 + Hw + 2              # ahir/demirci: sur merdivenlerinin arkasinda
     sw, sd = 5, min(12, z1 - T_ - sz0 - 1)
     if sd >= 6:

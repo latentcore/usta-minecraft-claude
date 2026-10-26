@@ -34,7 +34,10 @@ public final class Classify {
 		"suspicious_gravel", "firefly_bush", "leaf_litter", "wildflowers", "bush", "short_dry_grass", "tall_dry_grass",
 		"pale_hanging_moss", "pale_moss_block", "moss_block", "creaking_heart", "resin_clump", "cave_vines", "cave_vines_plant",
 		"cocoa", "dried_kelp_block", "coarse_dirt", "podzol", "mycelium", "dirt_path", "farmland", "grass_block", "dirt",
-		"red_sandstone", "sandstone", "terracotta"
+		"red_sandstone", "sandstone", "terracotta",
+		// arazide kendiliginden olusanlar: cevher damari bloklari, dagdaki/derindeki gumus balikli tas
+		// (kale tuglasinin gumus balikli hali kalenin parcasi: yapay kalir)
+		"raw_iron_block", "raw_copper_block", "infested_stone", "infested_deepslate"
 	);
 
 	public static boolean isNatural(BlockState s) {
@@ -67,6 +70,7 @@ public final class Classify {
 			|| s.is(BlockTags.SUBSTRATE_OVERWORLD) || s.is(BlockTags.OVERWORLD_NATURAL_LOGS) || s.is(BlockTags.LEAVES)
 			|| s.is(BlockTags.SMALL_FLOWERS) || s.is(BlockTags.FLOWERS) || s.is(BlockTags.SAPLINGS) || s.is(BlockTags.ICE)
 			|| s.is(BlockTags.SNOW) || s.is(BlockTags.CORALS) || s.is(BlockTags.CORAL_BLOCKS) || s.is(BlockTags.CORAL_PLANTS)
+			|| s.is(BlockTags.WALL_CORALS)
 			|| s.is(BlockTags.TERRACOTTA) || s.is(BlockTags.NYLIUM) || s.is(BlockTags.CAVE_VINES) || s.is(BlockTags.MOSS_BLOCKS)
 			|| s.is(BlockTags.GRASS_BLOCKS) || s.is(BlockTags.REPLACEABLE_BY_TREES) || s.is(BlockTags.GOLD_ORES)
 			|| s.is(BlockTags.IRON_ORES) || s.is(BlockTags.COPPER_ORES) || s.is(BlockTags.SCULK_REPLACEABLE_WORLD_GEN)) {
